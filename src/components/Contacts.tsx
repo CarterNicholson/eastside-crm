@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { Search, Plus, Phone, Mail, Building2, MapPin, ChevronRight, Filter, X, Edit2, Trash2, ArrowUpDown, SlidersHorizontal, ChevronUp, ChevronDown, Columns, Star, RefreshCw, Download } from 'lucide-react';
+import { Search, Plus, Phone, Mail, Building2, MapPin, ChevronRight, Filter, X, Edit2, Trash2, ArrowUpDown, SlidersHorizontal, ChevronUp, ChevronDown, Columns, Star, RefreshCw, Download, Sparkles, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -422,6 +422,29 @@ function ContactDetail({ contact, store, onClose, onEdit }: {
   const [showAddActivity, setShowAddActivity] = useState(false);
   const [editingActivity, setEditingActivity] = useState<string | null>(null);
 
+  // AI Insight
+  const [insight, setInsight] = useState<string | null>(null);
+  const [insightLoading, setInsightLoading] = useState(false);
+  const [insightContactId, setInsightContactId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (contact.id !== insightContactId) {
+      setInsight(null);
+      setInsightContactId(contact.id);
+      setInsightLoading(true);
+      const token = localStorage.getItem('crm_token') || '';
+      fetch('/api/ai/contact-insights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ contactId: contact.id }),
+      })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => { if (data?.insight) setInsight(data.insight); })
+        .catch(() => {})
+        .finally(() => setInsightLoading(false));
+    }
+  }, [contact.id]);
+
   return (
     <div className="h-full overflow-y-auto">
       <div className="p-5 space-y-5">
@@ -453,6 +476,21 @@ function ContactDetail({ contact, store, onClose, onEdit }: {
           <div className="flex items-center gap-2 text-muted-foreground"><Building2 size={13} /> {contact.company}</div>
           <div className="flex items-center gap-2 text-muted-foreground"><MapPin size={13} /> {contact.marketArea}</div>
         </div>
+
+        {/* AI Insight */}
+        {(insightLoading || insight) && (
+          <div className="bg-gradient-to-r from-amber-50/60 to-orange-50/40 border border-amber-200 rounded-lg p-3">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-amber-700 mb-1.5">
+              {insightLoading ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+              AI Insight
+            </div>
+            {insightLoading ? (
+              <div className="text-xs text-amber-600/70">Analyzing contact...</div>
+            ) : insight ? (
+              <div className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">{insight}</div>
+            ) : null}
+          </div>
+        )}
 
         {/* Property Info */}
         {(contact.propertyName || contact.address) && (

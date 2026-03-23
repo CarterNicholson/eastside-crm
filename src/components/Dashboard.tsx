@@ -1,5 +1,7 @@
-import { TrendingUp, Users, DollarSign, Activity, AlertTriangle, ArrowRight, Clock } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { TrendingUp, Users, DollarSign, Activity, AlertTriangle, ArrowRight, Clock, Loader2, RefreshCw } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import type { Store } from '../store';
 import type { Page } from './Sidebar';
 import { DEAL_STAGES } from '../types';
@@ -21,6 +23,55 @@ export function Dashboard({ store, onNavigate }: DashboardProps) {
   const activeDeals = deals.filter(d => !['closed_won', 'closed_lost'].includes(d.stage));
   const highPriorityDeals = activeDeals.filter(d => d.probability >= 40).sort((a, b) => b.dealValue - a.dealValue);
 
+  // AI Briefing state
+  const [briefing, setBriefing] = useState<string | null>(null);
+  const [briefingLoading, setBriefingLoading] = useState(false);
+  const [briefingError, setBriefingError] = useState<string | null>(null);
+
+  const loadBriefing = async () => {
+    setBriefingLoading(true);
+    setBriefingError(null);
+    try {
+      const token = localStorage.getItem('crm_token') || '';
+      const res = await fetch('/api/ai/briefing', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load briefing');
+      setBriefing(data.briefing);
+    } catch (err: any) {
+      setBriefingError(err.message);
+    } finally {
+      setBriefingLoading(false);
+    }
+  };
+
+  // Auto-load briefing on mount
+  useEffect(() => {
+    if (!store.isLoading && contacts.length > 0) {
+      loadBriefing();
+    }
+  }, [store.isLoading]);
+
+  const renderBriefing = (text: string) => {
+    return text.split('\n').map((line, i) => {
+      const parts = line.split(/(\*\*.*?\*\*)/).map((part, j) =>
+        part.startsWith('**') && part.endsWith('**')
+          ? <strong key={j}>{part.slice(2, -2)}</strong>
+          : <span key={j}>{part}</span>
+      );
+      if (line.trim().startsWith('- ') || line.trim().startsWith('• ')) {
+        return <div key={i} className="flex gap-2 ml-1"><span className="text-amber-500">•</span><span className="text-sm">{parts}</span></div>;
+      }
+      return <div key={i} className="text-sm">{line === '' ? <br /> : parts}</div>;
+    });
+  };
+
   return (
     <div className="p-6 space-y-6 max-w-[1400px]">
       {/* Header */}
@@ -30,6 +81,46 @@ export function Dashboard({ store, onNavigate }: DashboardProps) {
           {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
         </p>
       </div>
+
+      {/* AI Daily Briefing */}
+      <Card className="border-amber-200 bg-gradient-to-r from-amber-50/50 to-orange-50/30">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <Sparkles size={15} className="text-amber-500" />
+              AI Daily Briefing
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-muted-foreground" onClick={loadBriefing} disabled={briefingLoading}>
+                <RefreshCw size={11} className={briefingLoading ? 'animate-spin' : ''} /> Refresh
+              </Button>
+              <button onClick={() => onNavigate('assistant')} className="text-xs text-[hsl(215,65%,45%)] hover:underline flex items-center gap-1">
+                Open Assistant <ArrowRight size={12} />
+              </button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-0">
+          {briefingLoading && !briefing && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground py-3">
+              <Loader2 size={14} className="animate-spin text-amber-500" />
+              Generating your daily briefing...
+            </div>
+          )}
+          {briefingError && !briefing && (
+            <div className="text-sm text-muted-foreground py-2">
+              {briefingError.includes('not configured')
+                ? 'Add your ANTHROPIC_API_KEY in Railway to enable AI briefings.'
+                : 'Could not load briefing. Click refresh to try again.'}
+            </div>
+          )}
+          {briefing && (
+            <div className="space-y-1 leading-relaxed">
+              {renderBriefing(briefing)}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Stat Cards */}
       <div className="grid grid-cols-4 gap-4">
@@ -43,41 +134,6 @@ export function Dashboard({ store, onNavigate }: DashboardProps) {
       <div className="grid grid-cols-5 gap-5">
         {/* Left column — 3/5 */}
         <div className="col-span-3 space-y-5">
-          {/* AI Suggestions */}
-          {activeSuggestions.length > 0 && (
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                    <Sparkles size={15} className="text-amber-500" />
-                    AI Suggestions
-                  </CardTitle>
-                  <button onClick={() => onNavigate('assistant')} className="text-xs text-[hsl(215,65%,45%)] hover:underline flex items-center gap-1">
-                    View All <ArrowRight size={12} />
-                  </button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {activeSuggestions.slice(0, 3).map(s => (
-                  <div key={s.id} className={`flex items-start gap-3 p-3 rounded border-l-2 bg-muted/40 ${
-                    s.priority === 'high' ? 'border-l-red-400' : s.priority === 'medium' ? 'border-l-amber-400' : 'border-l-gray-300'
-                  }`}>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-foreground">{s.title}</div>
-                      <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{s.description}</div>
-                    </div>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap ${
-                      s.type === 'follow_up' ? 'bg-blue-100 text-blue-700' :
-                      s.type === 'deal_risk' ? 'bg-red-100 text-red-700' :
-                      s.type === 'opportunity' ? 'bg-green-100 text-green-700' :
-                      'bg-amber-100 text-amber-700'
-                    }`}>{s.type.replace('_', ' ')}</span>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
-
           {/* Pipeline Summary */}
           <Card>
             <CardHeader className="pb-3">
