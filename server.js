@@ -225,7 +225,7 @@ app.post('/api/emails/inbound', (req, res) => {
     date: parseEmailDate(data.receivedDateTime || data.DateTimeReceived || data.date),
     contactId: null,
     dealId: null,
-    isInbound: true,
+    isInbound: data.isInbound !== undefined ? data.isInbound : true,
     isRead: false,
     source: 'outlook',
     rawHeaders: {
@@ -239,7 +239,8 @@ app.post('/api/emails/inbound', (req, res) => {
   emails.unshift(email);
   saveJSON(EMAILS_FILE, emails);
 
-  console.log(`[Email Received] From: ${email.from} | Subject: ${email.subject}`);
+  const direction = email.isInbound ? 'Received' : 'Sent';
+  console.log(`[Email ${direction}] ${email.isInbound ? 'From' : 'To'}: ${email.isInbound ? email.from : email.to} | Subject: ${email.subject}`);
   res.json({ success: true, id: email.id });
 });
 

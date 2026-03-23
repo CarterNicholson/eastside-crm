@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from 'react';
-import { Search, Plus, Phone, Mail, Building2, MapPin, ChevronRight, Filter, X, Edit2, Trash2, ArrowUpDown, SlidersHorizontal } from 'lucide-react';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { Search, Plus, Phone, Mail, Building2, MapPin, ChevronRight, Filter, X, Edit2, Trash2, ArrowUpDown, SlidersHorizontal, ChevronUp, ChevronDown, Columns, Star, RefreshCw, Download } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,8 @@ import type { Store } from '../store';
 import type { Contact, ContactType, Priority, ActivityType, Activity } from '../types';
 import { CONTACT_TYPES } from '../types';
 
-type SortOption = 'priority' | 'name_asc' | 'name_desc' | 'company' | 'last_contacted' | 'newest' | 'property_name' | 'address';
+type SortField = 'name' | 'company' | 'title' | 'type' | 'propertyName' | 'email' | 'phone' | 'contactOwner' | 'address' | 'submarket' | 'mobile' | 'notes';
+type SortDir = 'asc' | 'desc';
 
 interface ContactsProps {
   store: Store;
@@ -20,17 +21,51 @@ interface ContactsProps {
   onFocusHandled?: () => void;
 }
 
+const ALL_COLUMNS = [
+  { key: 'name', label: 'Name', width: 'min-w-[160px]' },
+  { key: 'prospect', label: 'Prospect', width: 'min-w-[70px] w-[70px]' },
+  { key: 'company', label: 'Company Name', width: 'min-w-[160px]' },
+  { key: 'title', label: 'Title', width: 'min-w-[120px]' },
+  { key: 'type', label: 'Contact Type', width: 'min-w-[100px]' },
+  { key: 'propertyName', label: 'Property Name', width: 'min-w-[170px]' },
+  { key: 'email', label: 'Email', width: 'min-w-[180px]' },
+  { key: 'phone', label: 'Phone', width: 'min-w-[120px]' },
+  { key: 'contactOwner', label: 'Contact Owner', width: 'min-w-[120px]' },
+  { key: 'notes', label: 'Notes', width: 'min-w-[180px]' },
+  { key: 'mobile', label: 'Mobile Phone', width: 'min-w-[120px]' },
+  { key: 'submarket', label: 'Submarket', width: 'min-w-[120px]' },
+  { key: 'address', label: 'Address', width: 'min-w-[200px]' },
+] as const;
+
+const DEFAULT_VISIBLE = ['name', 'prospect', 'company', 'title', 'type', 'propertyName', 'email', 'phone', 'contactOwner', 'notes', 'mobile'];
+
 export function Contacts({ store, focusContactId, onFocusHandled }: ContactsProps) {
   const { contacts, addContact, updateContact, deleteContact, getContactDeals, getContactActivities, getContactReminders } = store;
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<ContactType | 'all'>('all');
   const [submarketFilter, setSubmarketFilter] = useState<string>('all');
   const [companyFilter, setCompanyFilter] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<SortOption>('priority');
-  const [showFilters, setShowFilters] = useState(false);
+  const [ownerFilter, setOwnerFilter] = useState<string>('all');
+  const [propertyNameFilter, setPropertyNameFilter] = useState<string>('all');
+  const [sortField, setSortField] = useState<SortField>('name');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(DEFAULT_VISIBLE);
+  const [showColumnPicker, setShowColumnPicker] = useState(false);
+  const columnPickerRef = useRef<HTMLDivElement>(null);
+
+  // Close column picker on outside click
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (columnPickerRef.current && !columnPickerRef.current.contains(e.target as Node)) {
+        setShowColumnPicker(false);
+      }
+    };
+    if (showColumnPicker) document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showColumnPicker]);
 
   // Auto-select contact when navigated from follow-ups
   useEffect(() => {
@@ -38,7 +73,7 @@ export function Contacts({ store, focusContactId, onFocusHandled }: ContactsProp
       const contact = contacts.find(c => c.id === focusContactId);
       if (contact) {
         setSelectedContact(contact);
-        setSearch(''); // Clear search so they can see the contact
+        setSearch('');
         setTypeFilter('all');
         setSubmarketFilter('all');
         setCompanyFilter('all');
@@ -57,8 +92,52 @@ export function Contacts({ store, focusContactId, onFocusHandled }: ContactsProp
   const companies = useMemo(() => {
     const comps = new Set<string>();
     contacts.forEach(c => { if (c.company) comps.add(c.company); });
-    return Array.from(comps).sort().slice(0, 100); // Top 100 to keep dropdown manageable
+    return Array.from(comps).sort().slice(0, 200);
   }, [contacts]);
+
+  const propertyNames = useMemo(() => {
+    const props = new Set<string>();
+    contacts.forEach(c => { if (c.propertyName) props.add(c.propertyName); });
+    return Array.from(props).sort().slice(0, 200);
+  }, [contacts]);
+
+  const hasActiveFilters = typeFilter !== 'all' || submarketFilter !== 'all' || companyFilter !== 'all' || ownerFilter !== 'all' || propertyNameFilter !== 'all';
+
+  const clearAllFilters = () => {
+    setTypeFilter('all');
+    setSubmarketFilter('all');
+    setCompanyFilter('all');
+    setOwnerFilter('all');
+    setPropertyNameFilter('all');
+    setSearch('');
+  };
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDir('asc');
+    }
+  };
+
+  const getContactValue = (c: Contact, field: SortField): string => {
+    switch (field) {
+      case 'name': return `${c.lastName}, ${c.firstName}`;
+      case 'company': return c.company || '';
+      case 'title': return c.title || '';
+      case 'type': return c.type || '';
+      case 'propertyName': return c.propertyName || '';
+      case 'email': return c.email || '';
+      case 'phone': return c.phone || '';
+      case 'contactOwner': return 'Carter Nicholson'; // All contacts owned by Carter for now
+      case 'address': return c.address || '';
+      case 'submarket': return c.submarket || c.marketArea || '';
+      case 'mobile': return c.mobile || '';
+      case 'notes': return c.notes || '';
+      default: return '';
+    }
+  };
 
   const filtered = useMemo(() => {
     return contacts.filter(c => {
@@ -66,169 +145,258 @@ export function Contacts({ store, focusContactId, onFocusHandled }: ContactsProp
       const matchSearch = search === '' || [
         c.firstName, c.lastName, c.company, c.email, c.phone,
         c.address || '', c.submarket || '', c.marketArea, c.propertyName || '',
-        c.title, c.notes,
-      ].some(field => field.toLowerCase().includes(searchLower));
+        c.title, c.notes, c.mobile || '',
+      ].some(field => field?.toLowerCase().includes(searchLower));
       const matchType = typeFilter === 'all' || c.type === typeFilter;
       const matchSubmarket = submarketFilter === 'all' || c.submarket === submarketFilter || c.marketArea === submarketFilter;
       const matchCompany = companyFilter === 'all' || c.company === companyFilter;
-      return matchSearch && matchType && matchSubmarket && matchCompany;
+      const matchPropertyName = propertyNameFilter === 'all' || c.propertyName === propertyNameFilter;
+      // Owner filter — for now all contacts are Carter's
+      const matchOwner = ownerFilter === 'all' || true;
+      return matchSearch && matchType && matchSubmarket && matchCompany && matchPropertyName && matchOwner;
     }).sort((a, b) => {
-      switch (sortBy) {
-        case 'name_asc': return `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`);
-        case 'name_desc': return `${b.lastName} ${b.firstName}`.localeCompare(`${a.lastName} ${a.firstName}`);
-        case 'company': return (a.company || '').localeCompare(b.company || '');
-        case 'property_name': return (a.propertyName || '').localeCompare(b.propertyName || '');
-        case 'address': return (a.address || '').localeCompare(b.address || '');
-        case 'last_contacted': {
-          const aDate = a.lastContactedAt || '1900-01-01';
-          const bDate = b.lastContactedAt || '1900-01-01';
-          return bDate.localeCompare(aDate);
-        }
-        case 'newest': return b.createdAt.localeCompare(a.createdAt);
-        default: {
-          const priorityOrder = { high: 0, medium: 1, low: 2 };
-          return priorityOrder[a.priority] - priorityOrder[b.priority];
-        }
-      }
+      const aVal = getContactValue(a, sortField);
+      const bVal = getContactValue(b, sortField);
+      const cmp = aVal.localeCompare(bVal, undefined, { sensitivity: 'base' });
+      return sortDir === 'asc' ? cmp : -cmp;
     });
-  }, [contacts, search, typeFilter, submarketFilter, companyFilter, sortBy]);
+  }, [contacts, search, typeFilter, submarketFilter, companyFilter, propertyNameFilter, ownerFilter, sortField, sortDir]);
+
+  const toggleColumn = (key: string) => {
+    setVisibleColumns(prev =>
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    );
+  };
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) return <ArrowUpDown size={11} className="text-gray-300 ml-1 flex-shrink-0" />;
+    return sortDir === 'asc'
+      ? <ChevronUp size={12} className="text-blue-600 ml-1 flex-shrink-0" />
+      : <ChevronDown size={12} className="text-blue-600 ml-1 flex-shrink-0" />;
+  };
 
   return (
-    <div className="flex h-full">
-      {/* Contact List */}
-      <div className={`${selectedContact ? 'w-[380px]' : 'flex-1 max-w-[900px]'} flex flex-col border-r border-border`}>
-        <div className="p-4 space-y-3 border-b border-border">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Contacts</h2>
-            <Button size="sm" onClick={() => setShowAddDialog(true)} className="gap-1.5 bg-[hsl(215,65%,45%)] hover:bg-[hsl(215,65%,40%)]">
-              <Plus size={14} /> Add Contact
+    <div className="flex h-full flex-col">
+      {/* ─── Filter Bar ──────────────────────────────────────── */}
+      <div className="border-b border-border bg-white">
+        <div className="flex items-center gap-2 px-4 py-2 flex-wrap">
+          <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as any)}>
+            <SelectTrigger className="h-8 text-xs w-auto min-w-[120px] bg-white border-gray-300">
+              <SelectValue placeholder="Contact Type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Contact Type</SelectItem>
+              {CONTACT_TYPES.map(t => <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+
+          <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+            <SelectTrigger className="h-8 text-xs w-auto min-w-[100px] bg-white border-gray-300">
+              <SelectValue placeholder="Owner" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Owner</SelectItem>
+              <SelectItem value="carter">Carter Nicholson</SelectItem>
+              <SelectItem value="greg">Greg Fuchs</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={companyFilter} onValueChange={setCompanyFilter}>
+            <SelectTrigger className="h-8 text-xs w-auto min-w-[110px] bg-white border-gray-300">
+              <SelectValue placeholder="Company" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Company</SelectItem>
+              {companies.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
+
+          <Select value={submarketFilter} onValueChange={setSubmarketFilter}>
+            <SelectTrigger className="h-8 text-xs w-auto min-w-[110px] bg-white border-gray-300">
+              <SelectValue placeholder="Submarket" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Submarket</SelectItem>
+              {submarkets.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+
+          <Select value={propertyNameFilter} onValueChange={setPropertyNameFilter}>
+            <SelectTrigger className="h-8 text-xs w-auto min-w-[130px] bg-white border-gray-300">
+              <SelectValue placeholder="Property Name" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Property Name</SelectItem>
+              {propertyNames.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+            </SelectContent>
+          </Select>
+
+          <div className="flex-1" />
+
+          {hasActiveFilters && (
+            <Button size="sm" variant="ghost" className="h-8 text-xs text-gray-500 hover:text-gray-700" onClick={clearAllFilters}>
+              <X size={12} className="mr-1" /> Clear Filters
             </Button>
-          </div>
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <Search size={14} className="absolute left-2.5 top-2.5 text-muted-foreground" />
-              <Input placeholder="Search name, company, address, submarket..." value={search} onChange={e => setSearch(e.target.value)} className="pl-8 h-9 text-sm" />
-            </div>
-            <Button size="sm" variant={showFilters ? 'default' : 'outline'} onClick={() => setShowFilters(!showFilters)} className="h-9 gap-1.5">
-              <SlidersHorizontal size={13} /> Filters
-            </Button>
-          </div>
-          {/* Advanced Filters */}
-          {showFilters && (
-            <div className="space-y-2">
-              <div className="flex gap-2 flex-wrap">
-                <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as any)}>
-                  <SelectTrigger className="w-32 h-8 text-xs"><SelectValue placeholder="Type" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Types</SelectItem>
-                    {CONTACT_TYPES.map(t => <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <Select value={submarketFilter} onValueChange={setSubmarketFilter}>
-                  <SelectTrigger className="w-40 h-8 text-xs"><SelectValue placeholder="Submarket" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Submarkets</SelectItem>
-                    {submarkets.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <Select value={companyFilter} onValueChange={setCompanyFilter}>
-                  <SelectTrigger className="w-40 h-8 text-xs"><SelectValue placeholder="Company" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Companies</SelectItem>
-                    {companies.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex gap-2 flex-wrap">
-                <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
-                  <SelectTrigger className="w-44 h-8 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="priority">Sort: Priority</SelectItem>
-                    <SelectItem value="name_asc">Sort: Name (A-Z)</SelectItem>
-                    <SelectItem value="name_desc">Sort: Name (Z-A)</SelectItem>
-                    <SelectItem value="company">Sort: Company (A-Z)</SelectItem>
-                    <SelectItem value="property_name">Sort: Property Name (A-Z)</SelectItem>
-                    <SelectItem value="address">Sort: Address (A-Z)</SelectItem>
-                    <SelectItem value="last_contacted">Sort: Last Contacted</SelectItem>
-                    <SelectItem value="newest">Sort: Newest First</SelectItem>
-                  </SelectContent>
-                </Select>
-                {(typeFilter !== 'all' || submarketFilter !== 'all' || companyFilter !== 'all') && (
-                  <Button size="sm" variant="ghost" className="h-8 text-xs text-muted-foreground" onClick={() => { setTypeFilter('all'); setSubmarketFilter('all'); setCompanyFilter('all'); }}>
-                    <X size={12} className="mr-1" /> Clear filters
-                  </Button>
-                )}
-              </div>
-            </div>
           )}
-          <div className="text-xs text-muted-foreground">{filtered.length} contacts</div>
         </div>
-        <div className="flex-1 overflow-y-auto">
-          {filtered.map(contact => (
-            <button
-              key={contact.id}
-              onClick={() => setSelectedContact(contact)}
-              className={`w-full text-left p-3 border-b border-border hover:bg-muted/50 transition-colors ${
-                selectedContact?.id === contact.id ? 'bg-[hsl(215,65%,45%)]/5 border-l-2 border-l-[hsl(215,65%,45%)]' : ''
-              }`}
-            >
-              <div className="flex items-start gap-3">
-                <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0 ${
-                  contact.priority === 'high' ? 'bg-blue-100 text-blue-700' :
-                  contact.priority === 'medium' ? 'bg-gray-100 text-gray-600' :
-                  'bg-gray-50 text-gray-400'
-                }`}>
-                  {contact.firstName[0]}{contact.lastName[0]}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium truncate">{contact.firstName} {contact.lastName}</span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                      contact.type === 'tenant' ? 'bg-blue-100 text-blue-700' :
-                      contact.type === 'buyer' ? 'bg-green-100 text-green-700' :
-                      contact.type === 'landlord' ? 'bg-purple-100 text-purple-700' :
-                      contact.type === 'prospect' ? 'bg-amber-100 text-amber-700' :
-                      'bg-gray-100 text-gray-600'
-                    }`}>{contact.type}</span>
-                  </div>
-                  <div className="text-xs text-muted-foreground truncate">{contact.company} — {contact.title}</div>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                      <MapPin size={10} />{contact.marketArea}
-                    </span>
-                    {contact.lastContactedAt && (
-                      <span className="text-[10px] text-muted-foreground">
-                        Last: {formatDate(contact.lastContactedAt)}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                {contact.priority === 'high' && <div className="w-1.5 h-1.5 rounded-full bg-red-400 mt-2 flex-shrink-0" />}
+
+        {/* ─── Search + Actions Bar ────────────────────────────── */}
+        <div className="flex items-center gap-3 px-4 py-2 border-t border-gray-100">
+          <div className="relative flex-1 max-w-md">
+            <Search size={14} className="absolute left-2.5 top-2.5 text-muted-foreground" />
+            <Input
+              placeholder={`Search ${filtered.length} contacts...`}
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="pl-8 h-9 text-sm bg-white"
+            />
+          </div>
+          <div className="flex-1" />
+
+          {/* Columns toggle */}
+          <div className="relative" ref={columnPickerRef}>
+            <Button size="sm" variant="outline" className="h-9 gap-1.5 text-xs" onClick={() => setShowColumnPicker(!showColumnPicker)}>
+              <Columns size={13} /> Columns
+            </Button>
+            {showColumnPicker && (
+              <div className="absolute right-0 top-10 z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-3 w-56">
+                <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Show Columns</div>
+                {ALL_COLUMNS.map(col => (
+                  <label key={col.key} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 px-1 rounded text-sm">
+                    <input
+                      type="checkbox"
+                      checked={visibleColumns.includes(col.key)}
+                      onChange={() => toggleColumn(col.key)}
+                      className="rounded border-gray-300"
+                    />
+                    {col.label}
+                  </label>
+                ))}
               </div>
-            </button>
-          ))}
+            )}
+          </div>
+
+          <Button size="sm" onClick={() => setShowAddDialog(true)} className="h-9 gap-1.5 bg-[hsl(215,65%,45%)] hover:bg-[hsl(215,65%,40%)] text-white">
+            <Plus size={14} /> Add Contact
+          </Button>
         </div>
       </div>
 
-      {/* Contact Detail */}
-      {selectedContact && (
-        <ContactDetail
-          contact={selectedContact}
-          store={store}
-          onClose={() => setSelectedContact(null)}
-          onEdit={() => setShowEditDialog(true)}
-        />
-      )}
+      {/* ─── Data Table ──────────────────────────────────────── */}
+      <div className="flex flex-1 overflow-hidden">
+        <div className={`${selectedContact ? 'w-[60%]' : 'flex-1'} overflow-auto`}>
+          <table className="w-full text-sm border-collapse">
+            <thead className="sticky top-0 z-10">
+              <tr className="bg-gray-50 border-b border-gray-200">
+                {ALL_COLUMNS.filter(col => visibleColumns.includes(col.key)).map(col => {
+                  const sortable = col.key !== 'prospect';
+                  return (
+                    <th
+                      key={col.key}
+                      className={`text-left text-xs font-semibold text-gray-500 px-3 py-2.5 border-r border-gray-100 whitespace-nowrap ${col.width} ${sortable ? 'cursor-pointer hover:bg-gray-100 select-none' : ''}`}
+                      onClick={() => sortable && handleSort(col.key as SortField)}
+                    >
+                      <div className="flex items-center">
+                        {col.label}
+                        {sortable && <SortIcon field={col.key as SortField} />}
+                      </div>
+                    </th>
+                  );
+                })}
+                {/* Edit column */}
+                <th className="w-[40px] px-2 py-2.5 bg-gray-50" />
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(contact => (
+                <tr
+                  key={contact.id}
+                  onClick={() => setSelectedContact(contact)}
+                  className={`border-b border-gray-100 cursor-pointer transition-colors ${
+                    selectedContact?.id === contact.id
+                      ? 'bg-blue-50 hover:bg-blue-50'
+                      : 'hover:bg-gray-50'
+                  }`}
+                >
+                  {visibleColumns.includes('name') && (
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <span className="font-medium text-gray-900">{contact.firstName} {contact.lastName}</span>
+                    </td>
+                  )}
+                  {visibleColumns.includes('prospect') && (
+                    <td className="px-3 py-2 text-center">
+                      <Star size={14} className={contact.priority === 'high' ? 'text-amber-400 fill-amber-400' : 'text-gray-200'} />
+                    </td>
+                  )}
+                  {visibleColumns.includes('company') && (
+                    <td className="px-3 py-2 whitespace-nowrap text-gray-700 max-w-[200px] truncate">{contact.company}</td>
+                  )}
+                  {visibleColumns.includes('title') && (
+                    <td className="px-3 py-2 whitespace-nowrap text-gray-500 max-w-[150px] truncate">{contact.title || '—'}</td>
+                  )}
+                  {visibleColumns.includes('type') && (
+                    <td className="px-3 py-2 whitespace-nowrap text-gray-500">{contact.type || '—'}</td>
+                  )}
+                  {visibleColumns.includes('propertyName') && (
+                    <td className="px-3 py-2 whitespace-nowrap text-gray-600 max-w-[200px] truncate">{contact.propertyName || '—'}</td>
+                  )}
+                  {visibleColumns.includes('email') && (
+                    <td className="px-3 py-2 whitespace-nowrap text-gray-500 max-w-[200px] truncate">{contact.email || '—'}</td>
+                  )}
+                  {visibleColumns.includes('phone') && (
+                    <td className="px-3 py-2 whitespace-nowrap text-gray-500">{contact.phone || '—'}</td>
+                  )}
+                  {visibleColumns.includes('contactOwner') && (
+                    <td className="px-3 py-2 whitespace-nowrap text-gray-500">Carter Nicholson</td>
+                  )}
+                  {visibleColumns.includes('notes') && (
+                    <td className="px-3 py-2 text-gray-400 max-w-[220px] truncate text-xs">{contact.notes ? `${contact.notes.slice(0, 60)}${contact.notes.length > 60 ? '...' : ''}` : '—'}</td>
+                  )}
+                  {visibleColumns.includes('mobile') && (
+                    <td className="px-3 py-2 whitespace-nowrap text-gray-500">{contact.mobile || '—'}</td>
+                  )}
+                  {visibleColumns.includes('submarket') && (
+                    <td className="px-3 py-2 whitespace-nowrap text-gray-500 max-w-[150px] truncate">{contact.submarket || contact.marketArea || '—'}</td>
+                  )}
+                  {visibleColumns.includes('address') && (
+                    <td className="px-3 py-2 text-gray-500 max-w-[240px] truncate text-xs">{contact.address || '—'}</td>
+                  )}
+                  <td className="px-2 py-2">
+                    <Edit2 size={12} className="text-gray-300 hover:text-gray-600 cursor-pointer" onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedContact(contact);
+                      setShowEditDialog(true);
+                    }} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {filtered.length === 0 && (
+            <div className="text-center text-gray-400 py-12 text-sm">No contacts match your filters.</div>
+          )}
+        </div>
 
-      {/* Add Dialog */}
+        {/* ─── Contact Detail Panel ──────────────────────────── */}
+        {selectedContact && (
+          <div className="w-[40%] border-l border-gray-200 overflow-hidden">
+            <ContactDetail
+              contact={selectedContact}
+              store={store}
+              onClose={() => setSelectedContact(null)}
+              onEdit={() => setShowEditDialog(true)}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* ─── Dialogs ─────────────────────────────────────────── */}
       <ContactFormDialog
         open={showAddDialog}
         onOpenChange={setShowAddDialog}
         onSave={(data) => { addContact(data); setShowAddDialog(false); }}
         title="Add Contact"
       />
-
-      {/* Edit Dialog */}
       {selectedContact && (
         <ContactFormDialog
           open={showEditDialog}
@@ -242,6 +410,8 @@ export function Contacts({ store, focusContactId, onFocusHandled }: ContactsProp
   );
 }
 
+// ─── Contact Detail Panel ──────────────────────────────────────────────
+
 function ContactDetail({ contact, store, onClose, onEdit }: {
   contact: Contact; store: Store; onClose: () => void; onEdit: () => void;
 }) {
@@ -253,7 +423,7 @@ function ContactDetail({ contact, store, onClose, onEdit }: {
   const [editingActivity, setEditingActivity] = useState<string | null>(null);
 
   return (
-    <div className="flex-1 overflow-y-auto">
+    <div className="h-full overflow-y-auto">
       <div className="p-5 space-y-5">
         {/* Header */}
         <div className="flex items-start justify-between">
@@ -278,11 +448,20 @@ function ContactDetail({ contact, store, onClose, onEdit }: {
 
         {/* Contact Info */}
         <div className="grid grid-cols-2 gap-3 text-sm">
-          <div className="flex items-center gap-2 text-muted-foreground"><Mail size={13} /> <a href={`mailto:${contact.email}`} className="text-[hsl(215,65%,45%)] hover:underline">{contact.email}</a></div>
+          <div className="flex items-center gap-2 text-muted-foreground"><Mail size={13} /> <a href={`mailto:${contact.email}`} className="text-[hsl(215,65%,45%)] hover:underline truncate">{contact.email}</a></div>
           <div className="flex items-center gap-2 text-muted-foreground"><Phone size={13} /> {contact.phone}</div>
           <div className="flex items-center gap-2 text-muted-foreground"><Building2 size={13} /> {contact.company}</div>
           <div className="flex items-center gap-2 text-muted-foreground"><MapPin size={13} /> {contact.marketArea}</div>
         </div>
+
+        {/* Property Info */}
+        {(contact.propertyName || contact.address) && (
+          <div className="bg-gray-50 rounded-lg p-3 text-sm space-y-1">
+            {contact.propertyName && <div className="font-medium text-gray-800">{contact.propertyName}</div>}
+            {contact.address && <div className="text-gray-500 text-xs">{contact.address}</div>}
+            {contact.submarket && <div className="text-gray-400 text-xs">{contact.submarket}</div>}
+          </div>
+        )}
 
         {/* Tags */}
         {contact.tags.length > 0 && (
@@ -447,7 +626,6 @@ function ActivityFormDialog({ open, onOpenChange, contactId, store, editActivity
     owner: existingActivity?.owner || '',
   });
 
-  // Reset form when dialog opens/activity changes
   useEffect(() => {
     if (open) {
       const a = editActivityId ? store.activities.find(act => act.id === editActivityId) : null;
