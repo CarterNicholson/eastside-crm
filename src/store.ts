@@ -59,9 +59,11 @@ export function useStore() {
 
   // Load data on mount
   useEffect(() => {
+    const token = localStorage.getItem('crm_token') || '';
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
     Promise.all([
       loadCRMData(),
-      fetch('/api/emails').then(r => r.ok ? r.json() : []).catch(() => []),
+      fetch('/api/emails', { headers }).then(r => r.ok ? r.json() : []).catch(() => []),
     ]).then(([data, apiEmails]) => {
       setContacts(data.contacts);
       setDeals(data.deals);
@@ -115,6 +117,10 @@ export function useStore() {
     return newActivity;
   }, []);
 
+  const updateActivity = useCallback((id: string, updates: Partial<Activity>) => {
+    setActivities(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
+  }, []);
+
   // Reminder CRUD
   const addReminder = useCallback((r: Omit<Reminder, 'id' | 'createdAt'>) => {
     const newReminder: Reminder = { ...r, id: genId(), createdAt: today() };
@@ -138,10 +144,10 @@ export function useStore() {
   const addEmail = useCallback((e: Omit<EmailEntry, 'id'>) => {
     const newEmail: EmailEntry = { ...e, id: genId() };
     setEmails(prev => [newEmail, ...prev]);
-    // Persist to backend
+    const token = localStorage.getItem('crm_token') || '';
     fetch('/api/emails', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: JSON.stringify(e),
     }).catch(() => {});
     return newEmail;
@@ -149,7 +155,9 @@ export function useStore() {
 
   // Refresh emails from server (for polling new inbound)
   const refreshEmails = useCallback(() => {
-    fetch('/api/emails').then(r => r.ok ? r.json() : []).then(apiEmails => {
+    const token = localStorage.getItem('crm_token') || '';
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+    fetch('/api/emails', { headers }).then(r => r.ok ? r.json() : []).then(apiEmails => {
       if (apiEmails.length > 0) setEmails(apiEmails);
     }).catch(() => {});
   }, []);
@@ -197,7 +205,7 @@ export function useStore() {
     // Deal ops
     addDeal, updateDeal, moveDealStage, deleteDeal, getDeal,
     // Activity ops
-    addActivity, getContactActivities, getDealActivities,
+    addActivity, updateActivity, getContactActivities, getDealActivities,
     // Reminder ops
     addReminder, updateReminder, completeReminder, dismissReminder,
     // Email ops

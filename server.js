@@ -20,7 +20,7 @@ function loadJSON(filepath, fallback = []) {
   try {
     if (existsSync(filepath)) return JSON.parse(readFileSync(filepath, 'utf-8'));
   } catch {}
-  return fallback;
+  return typeof fallback === 'function' ? fallback() : fallback;
 }
 
 function saveJSON(filepath, data) {
@@ -53,10 +53,16 @@ function deleteSession(token) {
   saveJSON(SESSIONS_FILE, sessions);
 }
 
+// Get userId from request (auth header)
+function getUserId(req) {
+  const token = (req.headers.authorization || '').replace('Bearer ', '');
+  const session = getSession(token);
+  return session?.userId || null;
+}
+
 // Initialize default users if none exist
 function initUsers() {
   const users = loadJSON(USERS_FILE, []);
-  // Re-create defaults if no users OR if carter's email needs updating
   const carter = users.find(u => u.id === 'user_carter');
   if (users.length === 0 || (carter && carter.email !== 'carter.nicholson@kidder.com')) {
     const defaults = [
@@ -75,7 +81,6 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // ─── AUTH ROUTES ────────────────────────────────────────────────────
 
-// Login
 app.post('/api/auth/login', (req, res) => {
   const { email, password } = req.body;
   const users = loadJSON(USERS_FILE, []);
@@ -89,14 +94,12 @@ app.post('/api/auth/login', (req, res) => {
   res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
 });
 
-// Logout
 app.post('/api/auth/logout', (req, res) => {
   const token = (req.headers.authorization || '').replace('Bearer ', '');
   deleteSession(token);
   res.json({ success: true });
 });
 
-// Check session / get current user
 app.get('/api/auth/me', (req, res) => {
   const token = (req.headers.authorization || '').replace('Bearer ', '');
   const session = getSession(token);
@@ -107,7 +110,6 @@ app.get('/api/auth/me', (req, res) => {
   res.json({ id: user.id, name: user.name, email: user.email, role: user.role });
 });
 
-// List users (admin only)
 app.get('/api/auth/users', (req, res) => {
   const token = (req.headers.authorization || '').replace('Bearer ', '');
   const session = getSession(token);
@@ -117,7 +119,6 @@ app.get('/api/auth/users', (req, res) => {
   res.json(users.map(u => ({ id: u.id, name: u.name, email: u.email, role: u.role })));
 });
 
-// Create user (admin only)
 app.post('/api/auth/users', (req, res) => {
   const token = (req.headers.authorization || '').replace('Bearer ', '');
   const session = getSession(token);
@@ -147,7 +148,6 @@ app.post('/api/auth/users', (req, res) => {
   res.json({ id: newUser.id, name: newUser.name, email: newUser.email, role: newUser.role });
 });
 
-// Change password
 app.post('/api/auth/change-password', (req, res) => {
   const token = (req.headers.authorization || '').replace('Bearer ', '');
   const session = getSession(token);
@@ -167,21 +167,32 @@ app.post('/api/auth/change-password', (req, res) => {
   res.json({ success: true });
 });
 
-// ─── EMAIL ROUTES ───────────────────────────────────────────────────
+// ─── EMAIL ROUTES (user-scoped) ─────────────────────────────────────
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', emails: loadJSON(EMAILS_FILE).length });
 });
 
+// Get emails — only returns emails for the authenticated user
 app.get('/api/emails', (req, res) => {
-  res.json(loadJSON(EMAILS_FILE));
+  const userId = getUserId(req);
+  const emails = loadJSON(EMAILS_FILE);
+  if (userId) {
+    // Return only emails belonging to this user (or unassigned legacy emails)
+    res.json(emails.filter(e => e.userId === userId || !e.userId));
+  } else {
+    res.json([]);
+  }
 });
 
+// Manually log an email (tagged to current user)
 app.post('/api/emails', (req, res) => {
+  const userId = getUserId(req);
   const { from, to, subject, body, contactId, dealId, isInbound } = req.body;
 
   const email = {
     id: `e_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    userId: userId || 'user_carter', // Default to Carter
     from: from || '',
     to: to || '',
     subject: subject || '(no subject)',
@@ -200,12 +211,13 @@ app.post('/api/emails', (req, res) => {
   res.json({ success: true, email });
 });
 
-// Power Automate webhook
+// Power Automate webhook — emails go to Carter's account by default
 app.post('/api/emails/inbound', (req, res) => {
   const data = req.body;
 
   const email = {
     id: `e_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    userId: 'user_carter', // Power Automate emails go to Carter
     from: data.from || data.From || data.sender || '',
     to: data.to || data.To || data.toRecipients || '',
     subject: data.subject || data.Subject || '(no subject)',

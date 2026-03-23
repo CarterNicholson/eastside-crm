@@ -9,10 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import type { Store } from '../store';
-import type { Contact, ContactType, Priority } from '../types';
+import type { Contact, ContactType, Priority, ActivityType, Activity } from '../types';
 import { CONTACT_TYPES } from '../types';
 
-type SortOption = 'priority' | 'name_asc' | 'name_desc' | 'company' | 'last_contacted' | 'newest';
+type SortOption = 'priority' | 'name_asc' | 'name_desc' | 'company' | 'last_contacted' | 'newest' | 'property_name' | 'address';
 
 interface ContactsProps {
   store: Store;
@@ -25,6 +25,7 @@ export function Contacts({ store, focusContactId, onFocusHandled }: ContactsProp
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<ContactType | 'all'>('all');
   const [submarketFilter, setSubmarketFilter] = useState<string>('all');
+  const [companyFilter, setCompanyFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<SortOption>('priority');
   const [showFilters, setShowFilters] = useState(false);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
@@ -40,16 +41,23 @@ export function Contacts({ store, focusContactId, onFocusHandled }: ContactsProp
         setSearch(''); // Clear search so they can see the contact
         setTypeFilter('all');
         setSubmarketFilter('all');
+        setCompanyFilter('all');
       }
       onFocusHandled?.();
     }
   }, [focusContactId, contacts, onFocusHandled]);
 
-  // Extract unique submarkets for filter dropdown
+  // Extract unique values for filter dropdowns
   const submarkets = useMemo(() => {
     const subs = new Set<string>();
     contacts.forEach(c => { if (c.submarket) subs.add(c.submarket); if (c.marketArea) subs.add(c.marketArea); });
     return Array.from(subs).sort();
+  }, [contacts]);
+
+  const companies = useMemo(() => {
+    const comps = new Set<string>();
+    contacts.forEach(c => { if (c.company) comps.add(c.company); });
+    return Array.from(comps).sort().slice(0, 100); // Top 100 to keep dropdown manageable
   }, [contacts]);
 
   const filtered = useMemo(() => {
@@ -62,12 +70,15 @@ export function Contacts({ store, focusContactId, onFocusHandled }: ContactsProp
       ].some(field => field.toLowerCase().includes(searchLower));
       const matchType = typeFilter === 'all' || c.type === typeFilter;
       const matchSubmarket = submarketFilter === 'all' || c.submarket === submarketFilter || c.marketArea === submarketFilter;
-      return matchSearch && matchType && matchSubmarket;
+      const matchCompany = companyFilter === 'all' || c.company === companyFilter;
+      return matchSearch && matchType && matchSubmarket && matchCompany;
     }).sort((a, b) => {
       switch (sortBy) {
         case 'name_asc': return `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`);
         case 'name_desc': return `${b.lastName} ${b.firstName}`.localeCompare(`${a.lastName} ${a.firstName}`);
         case 'company': return (a.company || '').localeCompare(b.company || '');
+        case 'property_name': return (a.propertyName || '').localeCompare(b.propertyName || '');
+        case 'address': return (a.address || '').localeCompare(b.address || '');
         case 'last_contacted': {
           const aDate = a.lastContactedAt || '1900-01-01';
           const bDate = b.lastContactedAt || '1900-01-01';
@@ -80,7 +91,7 @@ export function Contacts({ store, focusContactId, onFocusHandled }: ContactsProp
         }
       }
     });
-  }, [contacts, search, typeFilter, submarketFilter, sortBy]);
+  }, [contacts, search, typeFilter, submarketFilter, companyFilter, sortBy]);
 
   return (
     <div className="flex h-full">
@@ -104,37 +115,50 @@ export function Contacts({ store, focusContactId, onFocusHandled }: ContactsProp
           </div>
           {/* Advanced Filters */}
           {showFilters && (
-            <div className="flex gap-2 flex-wrap">
-              <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as any)}>
-                <SelectTrigger className="w-32 h-8 text-xs"><SelectValue placeholder="Type" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  {CONTACT_TYPES.map(t => <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={submarketFilter} onValueChange={setSubmarketFilter}>
-                <SelectTrigger className="w-40 h-8 text-xs"><SelectValue placeholder="Submarket" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Submarkets</SelectItem>
-                  {submarkets.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
-                <SelectTrigger className="w-40 h-8 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="priority">Sort: Priority</SelectItem>
-                  <SelectItem value="name_asc">Sort: Name (A-Z)</SelectItem>
-                  <SelectItem value="name_desc">Sort: Name (Z-A)</SelectItem>
-                  <SelectItem value="company">Sort: Company</SelectItem>
-                  <SelectItem value="last_contacted">Sort: Last Contacted</SelectItem>
-                  <SelectItem value="newest">Sort: Newest First</SelectItem>
-                </SelectContent>
-              </Select>
-              {(typeFilter !== 'all' || submarketFilter !== 'all') && (
-                <Button size="sm" variant="ghost" className="h-8 text-xs text-muted-foreground" onClick={() => { setTypeFilter('all'); setSubmarketFilter('all'); }}>
-                  <X size={12} className="mr-1" /> Clear filters
-                </Button>
-              )}
+            <div className="space-y-2">
+              <div className="flex gap-2 flex-wrap">
+                <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as any)}>
+                  <SelectTrigger className="w-32 h-8 text-xs"><SelectValue placeholder="Type" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Types</SelectItem>
+                    {CONTACT_TYPES.map(t => <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={submarketFilter} onValueChange={setSubmarketFilter}>
+                  <SelectTrigger className="w-40 h-8 text-xs"><SelectValue placeholder="Submarket" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Submarkets</SelectItem>
+                    {submarkets.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={companyFilter} onValueChange={setCompanyFilter}>
+                  <SelectTrigger className="w-40 h-8 text-xs"><SelectValue placeholder="Company" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Companies</SelectItem>
+                    {companies.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
+                  <SelectTrigger className="w-44 h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="priority">Sort: Priority</SelectItem>
+                    <SelectItem value="name_asc">Sort: Name (A-Z)</SelectItem>
+                    <SelectItem value="name_desc">Sort: Name (Z-A)</SelectItem>
+                    <SelectItem value="company">Sort: Company (A-Z)</SelectItem>
+                    <SelectItem value="property_name">Sort: Property Name (A-Z)</SelectItem>
+                    <SelectItem value="address">Sort: Address (A-Z)</SelectItem>
+                    <SelectItem value="last_contacted">Sort: Last Contacted</SelectItem>
+                    <SelectItem value="newest">Sort: Newest First</SelectItem>
+                  </SelectContent>
+                </Select>
+                {(typeFilter !== 'all' || submarketFilter !== 'all' || companyFilter !== 'all') && (
+                  <Button size="sm" variant="ghost" className="h-8 text-xs text-muted-foreground" onClick={() => { setTypeFilter('all'); setSubmarketFilter('all'); setCompanyFilter('all'); }}>
+                    <X size={12} className="mr-1" /> Clear filters
+                  </Button>
+                )}
+              </div>
             </div>
           )}
           <div className="text-xs text-muted-foreground">{filtered.length} contacts</div>
@@ -225,6 +249,8 @@ function ContactDetail({ contact, store, onClose, onEdit }: {
   const activities = store.getContactActivities(contact.id);
   const reminders = store.getContactReminders(contact.id);
   const emails = store.getContactEmails(contact.id);
+  const [showAddActivity, setShowAddActivity] = useState(false);
+  const [editingActivity, setEditingActivity] = useState<string | null>(null);
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -314,16 +340,23 @@ function ContactDetail({ contact, store, onClose, onEdit }: {
 
         {/* Activity Timeline */}
         <Card>
-          <CardHeader className="py-3 px-4">
+          <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
             <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Activity Timeline</CardTitle>
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => { setShowAddActivity(true); setEditingActivity(null); }}>
+              <Plus size={12} /> Add Activity
+            </Button>
           </CardHeader>
           <CardContent className="pt-0 px-4 pb-3">
             {activities.length === 0 ? (
               <div className="text-sm text-muted-foreground text-center py-3">No activity yet</div>
             ) : (
               <div className="space-y-3">
-                {activities.slice(0, 10).map(a => (
-                  <div key={a.id} className="flex items-start gap-3 text-sm">
+                {activities.slice(0, 15).map(a => (
+                  <div
+                    key={a.id}
+                    className="flex items-start gap-3 text-sm group cursor-pointer hover:bg-muted/30 rounded p-1 -mx-1"
+                    onClick={() => { setEditingActivity(a.id); setShowAddActivity(true); }}
+                  >
                     <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 text-[9px] font-bold ${
                       a.type === 'tour' ? 'bg-blue-100 text-blue-700' :
                       a.type === 'call' ? 'bg-green-100 text-green-700' :
@@ -339,6 +372,7 @@ function ContactDetail({ contact, store, onClose, onEdit }: {
                             a.owner.toLowerCase() === 'greg' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
                           }`}>{a.owner}</span>
                         )}
+                        <Edit2 size={10} className="text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>
                       <div className="text-xs text-muted-foreground">{formatDate(a.date)}{a.description ? ` — ${a.description.slice(0, 80)}${a.description.length > 80 ? '...' : ''}` : ''}</div>
                     </div>
@@ -371,7 +405,135 @@ function ContactDetail({ contact, store, onClose, onEdit }: {
           </Card>
         )}
       </div>
+
+      {/* Add/Edit Activity Dialog */}
+      <ActivityFormDialog
+        open={showAddActivity}
+        onOpenChange={(open) => { setShowAddActivity(open); if (!open) setEditingActivity(null); }}
+        contactId={contact.id}
+        store={store}
+        editActivityId={editingActivity}
+      />
     </div>
+  );
+}
+
+// ─── Activity Form Dialog ───────────────────────────────────────────
+
+const ACTIVITY_TYPES: { key: ActivityType; label: string }[] = [
+  { key: 'call', label: 'Call' },
+  { key: 'email', label: 'Email' },
+  { key: 'meeting', label: 'Meeting' },
+  { key: 'tour', label: 'Tour' },
+  { key: 'note', label: 'Note' },
+  { key: 'loi_sent', label: 'LOI Sent' },
+  { key: 'loi_received', label: 'LOI Received' },
+  { key: 'proposal', label: 'Proposal' },
+];
+
+function ActivityFormDialog({ open, onOpenChange, contactId, store, editActivityId }: {
+  open: boolean; onOpenChange: (open: boolean) => void;
+  contactId: string; store: Store; editActivityId: string | null;
+}) {
+  const existingActivity = editActivityId
+    ? store.activities.find(a => a.id === editActivityId)
+    : null;
+
+  const [form, setForm] = useState({
+    type: (existingActivity?.type || 'note') as ActivityType,
+    subject: existingActivity?.subject || '',
+    description: existingActivity?.description || '',
+    date: existingActivity?.date || new Date().toISOString().split('T')[0],
+    owner: existingActivity?.owner || '',
+  });
+
+  // Reset form when dialog opens/activity changes
+  useEffect(() => {
+    if (open) {
+      const a = editActivityId ? store.activities.find(act => act.id === editActivityId) : null;
+      setForm({
+        type: (a?.type || 'note') as ActivityType,
+        subject: a?.subject || '',
+        description: a?.description || '',
+        date: a?.date || new Date().toISOString().split('T')[0],
+        owner: a?.owner || '',
+      });
+    }
+  }, [open, editActivityId, store.activities]);
+
+  const handleSave = () => {
+    if (!form.subject) return;
+    if (editActivityId) {
+      store.updateActivity(editActivityId, {
+        type: form.type,
+        subject: form.subject,
+        description: form.description,
+        date: form.date,
+        owner: form.owner || undefined,
+      });
+    } else {
+      store.addActivity({
+        type: form.type,
+        contactId,
+        subject: form.subject,
+        description: form.description,
+        date: form.date,
+        owner: form.owner || undefined,
+      });
+    }
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{editActivityId ? 'Edit Activity' : 'Add Activity'}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Type</Label>
+              <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v as ActivityType })}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ACTIVITY_TYPES.map(t => <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Owner</Label>
+              <Select value={form.owner || '_none'} onValueChange={(v) => setForm({ ...form, owner: v === '_none' ? '' : v })}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Who did this?" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">No owner</SelectItem>
+                  <SelectItem value="Carter">Carter</SelectItem>
+                  <SelectItem value="Greg">Greg</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs">Subject *</Label>
+            <Input value={form.subject} onChange={e => setForm({ ...form, subject: e.target.value })} className="mt-1" placeholder="e.g. Follow-up call re: lease renewal" />
+          </div>
+          <div>
+            <Label className="text-xs">Description / Notes</Label>
+            <Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="mt-1" rows={3} placeholder="Details about this activity..." />
+          </div>
+          <div>
+            <Label className="text-xs">Date</Label>
+            <Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} className="mt-1" />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button onClick={handleSave} className="bg-[hsl(215,65%,45%)] hover:bg-[hsl(215,65%,40%)]">
+              {editActivityId ? 'Save Changes' : 'Add Activity'}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
