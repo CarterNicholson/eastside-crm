@@ -1,53 +1,180 @@
 import express from 'express';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import crypto from 'crypto';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Store emails in a JSON file for persistence across requests
-const EMAILS_FILE = join(__dirname, 'data', 'emails.json');
-
 // Ensure data directory exists
-import { mkdirSync } from 'fs';
 try { mkdirSync(join(__dirname, 'data'), { recursive: true }); } catch {}
 
-function loadEmails() {
+const EMAILS_FILE = join(__dirname, 'data', 'emails.json');
+const USERS_FILE = join(__dirname, 'data', 'users.json');
+const SESSIONS_FILE = join(__dirname, 'data', 'sessions.json');
+
+// ─── JSON FILE HELPERS ──────────────────────────────────────────────
+function loadJSON(filepath, fallback = []) {
   try {
-    if (existsSync(EMAILS_FILE)) {
-      return JSON.parse(readFileSync(EMAILS_FILE, 'utf-8'));
-    }
+    if (existsSync(filepath)) return JSON.parse(readFileSync(filepath, 'utf-8'));
   } catch {}
-  return [];
+  return fallback;
 }
 
-function saveEmails(emails) {
-  try {
-    writeFileSync(EMAILS_FILE, JSON.stringify(emails, null, 2));
-  } catch (e) {
-    console.error('Failed to save emails:', e);
+function saveJSON(filepath, data) {
+  try { writeFileSync(filepath, JSON.stringify(data, null, 2)); }
+  catch (e) { console.error(`Failed to save ${filepath}:`, e); }
+}
+
+// ─── AUTH HELPERS ───────────────────────────────────────────────────
+function hashPassword(password) {
+  return crypto.createHash('sha256').update(password).digest('hex');
+}
+
+function createSession(userId, name, email) {
+  const token = crypto.randomBytes(32).toString('hex');
+  const sessions = loadJSON(SESSIONS_FILE, {});
+  sessions[token] = { userId, name, email, createdAt: new Date().toISOString() };
+  saveJSON(SESSIONS_FILE, sessions);
+  return token;
+}
+
+function getSession(token) {
+  if (!token) return null;
+  const sessions = loadJSON(SESSIONS_FILE, {});
+  return sessions[token] || null;
+}
+
+function deleteSession(token) {
+  const sessions = loadJSON(SESSIONS_FILE, {});
+  delete sessions[token];
+  saveJSON(SESSIONS_FILE, sessions);
+}
+
+// Initialize default users if none exist
+function initUsers() {
+  const users = loadJSON(USERS_FILE, []);
+  if (users.length === 0) {
+    const defaults = [
+      { id: 'user_carter', name: 'Carter Nicholson', email: 'carter122886@gmail.com', password: hashPassword('eastside2024'), role: 'admin' },
+      { id: 'user_greg', name: 'Greg', email: 'greg@kidder.com', password: hashPassword('eastside2024'), role: 'broker' },
+    ];
+    saveJSON(USERS_FILE, defaults);
+    console.log('Default users created (password: eastside2024)');
   }
 }
+initUsers();
 
 // Middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// ─── API ROUTES ───────────────────────────────────────────────────────
+// ─── AUTH ROUTES ────────────────────────────────────────────────────
 
-// Health check
+// Login
+app.post('/api/auth/login', (req, res) => {
+  const { email, password } = req.body;
+  const users = loadJSON(USERS_FILE, []);
+  const user = users.find(u => u.email.toLowerCase() === (email || '').toLowerCase());
+
+  if (!user || user.password !== hashPassword(password || '')) {
+    return res.status(401).json({ error: 'Invalid email or password' });
+  }
+
+  const token = createSession(user.id, user.name, user.email);
+  res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+});
+
+// Logout
+app.post('/api/auth/logout', (req, res) => {
+  const token = (req.headers.authorization || '').replace('Bearer ', '');
+  deleteSession(token);
+  res.json({ success: true });
+});
+
+// Check session / get current user
+app.get('/api/auth/me', (req, res) => {
+  const token = (req.headers.authorization || '').replace('Bearer ', '');
+  const session = getSession(token);
+  if (!session) return res.status(401).json({ error: 'Not authenticated' });
+  const users = loadJSON(USERS_FILE, []);
+  const user = users.find(u => u.id === session.userId);
+  if (!user) return res.status(401).json({ error: 'User not found' });
+  res.json({ id: user.id, name: user.name, email: user.email, role: user.role });
+});
+
+// List users (admin only)
+app.get('/api/auth/users', (req, res) => {
+  const token = (req.headers.authorization || '').replace('Bearer ', '');
+  const session = getSession(token);
+  if (!session) return res.status(401).json({ error: 'Not authenticated' });
+
+  const users = loadJSON(USERS_FILE, []);
+  res.json(users.map(u => ({ id: u.id, name: u.name, email: u.email, role: u.role })));
+});
+
+// Create user (admin only)
+app.post('/api/auth/users', (req, res) => {
+  const token = (req.headers.authorization || '').replace('Bearer ', '');
+  const session = getSession(token);
+  if (!session) return res.status(401).json({ error: 'Not authenticated' });
+
+  const users = loadJSON(USERS_FILE, []);
+  const requester = users.find(u => u.id === session.userId);
+  if (!requester || requester.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+
+  const { name, email, password, role } = req.body;
+  if (!name || !email || !password) return res.status(400).json({ error: 'Name, email, and password required' });
+
+  if (users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
+    return res.status(409).json({ error: 'Email already in use' });
+  }
+
+  const newUser = {
+    id: `user_${Date.now()}`,
+    name,
+    email,
+    password: hashPassword(password),
+    role: role || 'broker',
+  };
+  users.push(newUser);
+  saveJSON(USERS_FILE, users);
+
+  res.json({ id: newUser.id, name: newUser.name, email: newUser.email, role: newUser.role });
+});
+
+// Change password
+app.post('/api/auth/change-password', (req, res) => {
+  const token = (req.headers.authorization || '').replace('Bearer ', '');
+  const session = getSession(token);
+  if (!session) return res.status(401).json({ error: 'Not authenticated' });
+
+  const { currentPassword, newPassword } = req.body;
+  const users = loadJSON(USERS_FILE, []);
+  const user = users.find(u => u.id === session.userId);
+  if (!user) return res.status(401).json({ error: 'User not found' });
+
+  if (user.password !== hashPassword(currentPassword || '')) {
+    return res.status(400).json({ error: 'Current password is incorrect' });
+  }
+
+  user.password = hashPassword(newPassword);
+  saveJSON(USERS_FILE, users);
+  res.json({ success: true });
+});
+
+// ─── EMAIL ROUTES ───────────────────────────────────────────────────
+
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', emails: loadEmails().length });
+  res.json({ status: 'ok', emails: loadJSON(EMAILS_FILE).length });
 });
 
-// Get all emails
 app.get('/api/emails', (req, res) => {
-  res.json(loadEmails());
+  res.json(loadJSON(EMAILS_FILE));
 });
 
-// Manually log an email
 app.post('/api/emails', (req, res) => {
   const { from, to, subject, body, contactId, dealId, isInbound } = req.body;
 
@@ -65,20 +192,16 @@ app.post('/api/emails', (req, res) => {
     source: 'manual',
   };
 
-  const emails = loadEmails();
+  const emails = loadJSON(EMAILS_FILE);
   emails.unshift(email);
-  saveEmails(emails);
-
+  saveJSON(EMAILS_FILE, emails);
   res.json({ success: true, email });
 });
 
-// ─── POWER AUTOMATE WEBHOOK ──────────────────────────────────────────
-// This endpoint receives emails forwarded from Outlook via Power Automate
+// Power Automate webhook
 app.post('/api/emails/inbound', (req, res) => {
   const data = req.body;
 
-  // Power Automate sends different formats depending on the trigger
-  // We handle the common "When a new email arrives" trigger format
   const email = {
     id: `e_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     from: data.from || data.From || data.sender || '',
@@ -98,31 +221,25 @@ app.post('/api/emails/inbound', (req, res) => {
     },
   };
 
-  // Try to auto-match contact by email address
-  // (Frontend will handle the matching since it has the contact list)
-
-  const emails = loadEmails();
+  const emails = loadJSON(EMAILS_FILE);
   emails.unshift(email);
-  saveEmails(emails);
+  saveJSON(EMAILS_FILE, emails);
 
   console.log(`[Email Received] From: ${email.from} | Subject: ${email.subject}`);
-
   res.json({ success: true, id: email.id });
 });
 
-// Delete an email
 app.delete('/api/emails/:id', (req, res) => {
-  const emails = loadEmails().filter(e => e.id !== req.params.id);
-  saveEmails(emails);
+  const emails = loadJSON(EMAILS_FILE).filter(e => e.id !== req.params.id);
+  saveJSON(EMAILS_FILE, emails);
   res.json({ success: true });
 });
 
-// Mark email as read
 app.patch('/api/emails/:id/read', (req, res) => {
-  const emails = loadEmails().map(e =>
+  const emails = loadJSON(EMAILS_FILE).map(e =>
     e.id === req.params.id ? { ...e, isRead: true } : e
   );
-  saveEmails(emails);
+  saveJSON(EMAILS_FILE, emails);
   res.json({ success: true });
 });
 
@@ -143,17 +260,14 @@ function stripHtml(html) {
 
 function parseEmailDate(dateStr) {
   if (!dateStr) return new Date().toISOString().split('T')[0];
-  try {
-    return new Date(dateStr).toISOString().split('T')[0];
-  } catch {
-    return new Date().toISOString().split('T')[0];
-  }
+  try { return new Date(dateStr).toISOString().split('T')[0]; }
+  catch { return new Date().toISOString().split('T')[0]; }
 }
 
 // ─── SERVE FRONTEND ──────────────────────────────────────────────────
 app.use(express.static(join(__dirname, 'dist')));
 
-// SPA fallback — serve index.html for all non-API routes
+// SPA fallback
 app.use((req, res, next) => {
   if (req.method === 'GET' && !req.path.startsWith('/api')) {
     res.sendFile(join(__dirname, 'dist', 'index.html'));

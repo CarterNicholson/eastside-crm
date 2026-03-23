@@ -57,6 +57,7 @@ export interface Activity {
   description: string;
   date: string;
   createdAt: string;
+  owner?: string; // Who created this activity (e.g. "Carter", "Greg")
 }
 
 export interface Reminder {

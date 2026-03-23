@@ -13,9 +13,10 @@ import type { Priority, ReminderStatus } from '../types';
 
 interface RemindersProps {
   store: Store;
+  onNavigateToContact?: (contactId: string) => void;
 }
 
-export function Reminders({ store }: RemindersProps) {
+export function Reminders({ store, onNavigateToContact }: RemindersProps) {
   const { reminders, contacts, completeReminder, dismissReminder, addReminder, getContact } = store;
   const [filter, setFilter] = useState<'all' | 'pending' | 'overdue' | 'completed'>('pending');
   const [showAdd, setShowAdd] = useState(false);
@@ -111,7 +112,14 @@ export function Reminders({ store }: RemindersProps) {
                     </div>
                     <div className="text-xs text-muted-foreground mt-0.5">{r.description}</div>
                     <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
-                      {contact && <span>{contact.firstName} {contact.lastName} — {contact.company}</span>}
+                      {contact && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onNavigateToContact?.(r.contactId); }}
+                          className="text-[hsl(215,65%,45%)] hover:underline font-medium cursor-pointer"
+                        >
+                          {contact.firstName} {contact.lastName} — {contact.company}
+                        </button>
+                      )}
                       <span className={`flex items-center gap-1 ${isOverdue ? 'text-red-600 font-medium' : isToday ? 'text-amber-600 font-medium' : ''}`}>
                         <Calendar size={10} />
                         {isOverdue ? `Overdue (${formatDate(r.dueDate)})` : isToday ? 'Due today' : `Due ${formatDate(r.dueDate)}`}

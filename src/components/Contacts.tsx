@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { Search, Plus, Phone, Mail, Building2, MapPin, ChevronRight, Filter, X, Edit2, Trash2 } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { Search, Plus, Phone, Mail, Building2, MapPin, ChevronRight, Filter, X, Edit2, Trash2, ArrowUpDown, SlidersHorizontal } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -12,28 +12,75 @@ import type { Store } from '../store';
 import type { Contact, ContactType, Priority } from '../types';
 import { CONTACT_TYPES } from '../types';
 
+type SortOption = 'priority' | 'name_asc' | 'name_desc' | 'company' | 'last_contacted' | 'newest';
+
 interface ContactsProps {
   store: Store;
+  focusContactId?: string | null;
+  onFocusHandled?: () => void;
 }
 
-export function Contacts({ store }: ContactsProps) {
+export function Contacts({ store, focusContactId, onFocusHandled }: ContactsProps) {
   const { contacts, addContact, updateContact, deleteContact, getContactDeals, getContactActivities, getContactReminders } = store;
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<ContactType | 'all'>('all');
+  const [submarketFilter, setSubmarketFilter] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<SortOption>('priority');
+  const [showFilters, setShowFilters] = useState(false);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
 
+  // Auto-select contact when navigated from follow-ups
+  useEffect(() => {
+    if (focusContactId) {
+      const contact = contacts.find(c => c.id === focusContactId);
+      if (contact) {
+        setSelectedContact(contact);
+        setSearch(''); // Clear search so they can see the contact
+        setTypeFilter('all');
+        setSubmarketFilter('all');
+      }
+      onFocusHandled?.();
+    }
+  }, [focusContactId, contacts, onFocusHandled]);
+
+  // Extract unique submarkets for filter dropdown
+  const submarkets = useMemo(() => {
+    const subs = new Set<string>();
+    contacts.forEach(c => { if (c.submarket) subs.add(c.submarket); if (c.marketArea) subs.add(c.marketArea); });
+    return Array.from(subs).sort();
+  }, [contacts]);
+
   const filtered = useMemo(() => {
     return contacts.filter(c => {
-      const matchSearch = search === '' || `${c.firstName} ${c.lastName} ${c.company} ${c.email}`.toLowerCase().includes(search.toLowerCase());
+      const searchLower = search.toLowerCase();
+      const matchSearch = search === '' || [
+        c.firstName, c.lastName, c.company, c.email, c.phone,
+        c.address || '', c.submarket || '', c.marketArea, c.propertyName || '',
+        c.title, c.notes,
+      ].some(field => field.toLowerCase().includes(searchLower));
       const matchType = typeFilter === 'all' || c.type === typeFilter;
-      return matchSearch && matchType;
+      const matchSubmarket = submarketFilter === 'all' || c.submarket === submarketFilter || c.marketArea === submarketFilter;
+      return matchSearch && matchType && matchSubmarket;
     }).sort((a, b) => {
-      const priorityOrder = { high: 0, medium: 1, low: 2 };
-      return priorityOrder[a.priority] - priorityOrder[b.priority];
+      switch (sortBy) {
+        case 'name_asc': return `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`);
+        case 'name_desc': return `${b.lastName} ${b.firstName}`.localeCompare(`${a.lastName} ${a.firstName}`);
+        case 'company': return (a.company || '').localeCompare(b.company || '');
+        case 'last_contacted': {
+          const aDate = a.lastContactedAt || '1900-01-01';
+          const bDate = b.lastContactedAt || '1900-01-01';
+          return bDate.localeCompare(aDate);
+        }
+        case 'newest': return b.createdAt.localeCompare(a.createdAt);
+        default: {
+          const priorityOrder = { high: 0, medium: 1, low: 2 };
+          return priorityOrder[a.priority] - priorityOrder[b.priority];
+        }
+      }
     });
-  }, [contacts, search, typeFilter]);
+  }, [contacts, search, typeFilter, submarketFilter, sortBy]);
 
   return (
     <div className="flex h-full">
@@ -49,16 +96,47 @@ export function Contacts({ store }: ContactsProps) {
           <div className="flex gap-2">
             <div className="relative flex-1">
               <Search size={14} className="absolute left-2.5 top-2.5 text-muted-foreground" />
-              <Input placeholder="Search contacts..." value={search} onChange={e => setSearch(e.target.value)} className="pl-8 h-9 text-sm" />
+              <Input placeholder="Search name, company, address, submarket..." value={search} onChange={e => setSearch(e.target.value)} className="pl-8 h-9 text-sm" />
             </div>
-            <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as any)}>
-              <SelectTrigger className="w-36 h-9 text-sm"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                {CONTACT_TYPES.map(t => <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <Button size="sm" variant={showFilters ? 'default' : 'outline'} onClick={() => setShowFilters(!showFilters)} className="h-9 gap-1.5">
+              <SlidersHorizontal size={13} /> Filters
+            </Button>
           </div>
+          {/* Advanced Filters */}
+          {showFilters && (
+            <div className="flex gap-2 flex-wrap">
+              <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as any)}>
+                <SelectTrigger className="w-32 h-8 text-xs"><SelectValue placeholder="Type" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  {CONTACT_TYPES.map(t => <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={submarketFilter} onValueChange={setSubmarketFilter}>
+                <SelectTrigger className="w-40 h-8 text-xs"><SelectValue placeholder="Submarket" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Submarkets</SelectItem>
+                  {submarkets.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
+                <SelectTrigger className="w-40 h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="priority">Sort: Priority</SelectItem>
+                  <SelectItem value="name_asc">Sort: Name (A-Z)</SelectItem>
+                  <SelectItem value="name_desc">Sort: Name (Z-A)</SelectItem>
+                  <SelectItem value="company">Sort: Company</SelectItem>
+                  <SelectItem value="last_contacted">Sort: Last Contacted</SelectItem>
+                  <SelectItem value="newest">Sort: Newest First</SelectItem>
+                </SelectContent>
+              </Select>
+              {(typeFilter !== 'all' || submarketFilter !== 'all') && (
+                <Button size="sm" variant="ghost" className="h-8 text-xs text-muted-foreground" onClick={() => { setTypeFilter('all'); setSubmarketFilter('all'); }}>
+                  <X size={12} className="mr-1" /> Clear filters
+                </Button>
+              )}
+            </div>
+          )}
           <div className="text-xs text-muted-foreground">{filtered.length} contacts</div>
         </div>
         <div className="flex-1 overflow-y-auto">
@@ -253,9 +331,16 @@ function ContactDetail({ contact, store, onClose, onEdit }: {
                       a.type === 'loi_sent' ? 'bg-amber-100 text-amber-700' :
                       'bg-purple-100 text-purple-700'
                     }`}>{a.type[0].toUpperCase()}</div>
-                    <div>
-                      <div className="font-medium">{a.subject}</div>
-                      <div className="text-xs text-muted-foreground">{formatDate(a.date)}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{a.subject}</span>
+                        {a.owner && (
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${
+                            a.owner.toLowerCase() === 'greg' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+                          }`}>{a.owner}</span>
+                        )}
+                      </div>
+                      <div className="text-xs text-muted-foreground">{formatDate(a.date)}{a.description ? ` — ${a.description.slice(0, 80)}${a.description.length > 80 ? '...' : ''}` : ''}</div>
                     </div>
                   </div>
                 ))}

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   LayoutDashboard, Users, Kanban, Bell, Mail, Sparkles, Calendar,
-  ChevronLeft, ChevronRight, Search
+  ChevronLeft, ChevronRight, LogOut
 } from 'lucide-react';
 
 export type Page = 'dashboard' | 'contacts' | 'pipeline' | 'reminders' | 'email' | 'assistant' | 'digest';
@@ -22,9 +22,11 @@ interface SidebarProps {
   reminderCount: number;
   suggestionCount: number;
   unreadEmailCount: number;
+  user?: { id: string; name: string; email: string; role: string } | null;
+  onLogout?: () => void;
 }
 
-export function Sidebar({ currentPage, onNavigate, reminderCount, suggestionCount, unreadEmailCount }: SidebarProps) {
+export function Sidebar({ currentPage, onNavigate, reminderCount, suggestionCount, unreadEmailCount, user, onLogout }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
 
   const getBadge = (page: Page) => {
@@ -33,6 +35,10 @@ export function Sidebar({ currentPage, onNavigate, reminderCount, suggestionCoun
     if (page === 'email' && unreadEmailCount > 0) return unreadEmailCount;
     return null;
   };
+
+  const initials = user?.name
+    ? user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+    : 'U';
 
   return (
     <div className={`flex flex-col border-r border-border bg-white transition-all duration-200 ${collapsed ? 'w-16' : 'w-56'}`}>
@@ -81,6 +87,32 @@ export function Sidebar({ currentPage, onNavigate, reminderCount, suggestionCoun
           );
         })}
       </nav>
+
+      {/* User & Logout */}
+      {user && (
+        <div className="px-2 py-2 border-t border-border">
+          <div className={`flex items-center gap-2.5 px-2 py-1.5 ${collapsed ? 'justify-center' : ''}`}>
+            <div className="w-7 h-7 rounded-full bg-[hsl(215,65%,45%)]/15 flex items-center justify-center text-[10px] font-bold text-[hsl(215,65%,45%)] flex-shrink-0">
+              {initials}
+            </div>
+            {!collapsed && (
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-medium truncate">{user.name}</div>
+                <div className="text-[10px] text-muted-foreground truncate">{user.role}</div>
+              </div>
+            )}
+            {!collapsed && onLogout && (
+              <button
+                onClick={onLogout}
+                className="text-muted-foreground hover:text-foreground transition-colors p-1"
+                title="Sign out"
+              >
+                <LogOut size={14} />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Collapse toggle */}
       <div className="px-2 py-3 border-t border-border">
