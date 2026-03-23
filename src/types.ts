@@ -7,15 +7,20 @@ export type ReminderStatus = 'pending' | 'snoozed' | 'completed' | 'dismissed';
 
 export interface Contact {
   id: string;
+  oneSourceId?: string;
   firstName: string;
   lastName: string;
   company: string;
   title: string;
   email: string;
   phone: string;
+  mobile?: string;
   type: ContactType;
   tags: string[];
   notes: string;
+  address?: string;
+  submarket?: string;
+  propertyName?: string;
   createdAt: string;
   lastContactedAt: string | null;
   nextFollowUp: string | null;

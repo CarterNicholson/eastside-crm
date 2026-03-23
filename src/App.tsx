@@ -17,6 +17,18 @@ export default function App() {
   const activeSuggestions = store.getActiveSuggestions().length;
   const unreadEmails = store.emails.filter(e => !e.isRead && e.isInbound).length;
 
+  if (store.isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="inline-block h-10 w-10 animate-spin rounded-full border-4 border-primary border-r-transparent mb-4" />
+          <p className="text-muted-foreground text-sm">Loading your CRM data...</p>
+          <p className="text-muted-foreground text-xs mt-1">5,000+ contacts</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar
