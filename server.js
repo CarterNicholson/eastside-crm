@@ -56,9 +56,11 @@ function deleteSession(token) {
 // Initialize default users if none exist
 function initUsers() {
   const users = loadJSON(USERS_FILE, []);
-  if (users.length === 0) {
+  // Re-create defaults if no users OR if carter's email needs updating
+  const carter = users.find(u => u.id === 'user_carter');
+  if (users.length === 0 || (carter && carter.email !== 'carter.nicholson@kidder.com')) {
     const defaults = [
-      { id: 'user_carter', name: 'Carter Nicholson', email: 'carter122886@gmail.com', password: hashPassword('eastside2024'), role: 'admin' },
+      { id: 'user_carter', name: 'Carter Nicholson', email: 'carter.nicholson@kidder.com', password: hashPassword('eastside2024'), role: 'admin' },
       { id: 'user_greg', name: 'Greg', email: 'greg@kidder.com', password: hashPassword('eastside2024'), role: 'broker' },
     ];
     saveJSON(USERS_FILE, defaults);
