@@ -154,9 +154,11 @@ function parseEmailDate(dateStr) {
 app.use(express.static(join(__dirname, 'dist')));
 
 // SPA fallback — serve index.html for all non-API routes
-app.get('*', (req, res) => {
-  if (!req.path.startsWith('/api')) {
+app.use((req, res, next) => {
+  if (req.method === 'GET' && !req.path.startsWith('/api')) {
     res.sendFile(join(__dirname, 'dist', 'index.html'));
+  } else {
+    next();
   }
 });
 
