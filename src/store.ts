@@ -59,12 +59,15 @@ export function useStore() {
 
   // Load data on mount
   useEffect(() => {
-    loadCRMData().then(data => {
+    Promise.all([
+      loadCRMData(),
+      fetch('/api/emails').then(r => r.ok ? r.json() : []).catch(() => []),
+    ]).then(([data, apiEmails]) => {
       setContacts(data.contacts);
       setDeals(data.deals);
       setActivities(data.activities);
       setReminders(data.reminders);
-      setEmails(data.emails);
+      setEmails(apiEmails.length > 0 ? apiEmails : data.emails);
       setSuggestions(data.suggestions);
       setIsLoading(false);
     });
@@ -135,7 +138,20 @@ export function useStore() {
   const addEmail = useCallback((e: Omit<EmailEntry, 'id'>) => {
     const newEmail: EmailEntry = { ...e, id: genId() };
     setEmails(prev => [newEmail, ...prev]);
+    // Persist to backend
+    fetch('/api/emails', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(e),
+    }).catch(() => {});
     return newEmail;
+  }, []);
+
+  // Refresh emails from server (for polling new inbound)
+  const refreshEmails = useCallback(() => {
+    fetch('/api/emails').then(r => r.ok ? r.json() : []).then(apiEmails => {
+      if (apiEmails.length > 0) setEmails(apiEmails);
+    }).catch(() => {});
   }, []);
 
   // Suggestions
@@ -185,7 +201,7 @@ export function useStore() {
     // Reminder ops
     addReminder, updateReminder, completeReminder, dismissReminder,
     // Email ops
-    addEmail, getContactEmails,
+    addEmail, getContactEmails, refreshEmails,
     // Suggestion ops
     dismissSuggestion, getActiveSuggestions,
     // Relation helpers

@@ -126,50 +126,81 @@ export function EmailLog({ store }: EmailLogProps) {
 
       {/* Setup Dialog */}
       <Dialog open={showSetup} onOpenChange={setShowSetup}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Email Integration Setup</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <div className="flex items-start gap-3">
                 <Info size={16} className="text-blue-600 mt-0.5 flex-shrink-0" />
                 <div className="text-sm text-blue-800">
-                  <div className="font-medium mb-1">Outlook Auto-Forward Setup</div>
-                  <p className="leading-relaxed">Since your Outlook has security restrictions, set up an auto-forward rule to send copies of relevant emails to this CRM. Here's how:</p>
+                  <div className="font-medium mb-1">Power Automate + Webhook</div>
+                  <p className="leading-relaxed">This connects your Outlook inbox to the CRM using Microsoft Power Automate (included with your M365 license). New emails automatically appear in the Email Log.</p>
                 </div>
               </div>
             </div>
+
             <div className="space-y-3 text-sm">
               <div className="flex gap-3">
                 <span className="w-6 h-6 rounded-full bg-[hsl(215,65%,45%)] text-white flex items-center justify-center text-xs flex-shrink-0">1</span>
                 <div>
-                  <div className="font-medium">Create an Outlook Rule</div>
-                  <div className="text-muted-foreground">Go to File → Manage Rules → New Rule → "Apply rule on messages I receive"</div>
+                  <div className="font-medium">Open Power Automate</div>
+                  <div className="text-muted-foreground">Go to <a href="https://make.powerautomate.com" target="_blank" rel="noopener" className="underline text-blue-700">make.powerautomate.com</a> and sign in with your Kidder Mathews account.</div>
                 </div>
               </div>
               <div className="flex gap-3">
                 <span className="w-6 h-6 rounded-full bg-[hsl(215,65%,45%)] text-white flex items-center justify-center text-xs flex-shrink-0">2</span>
                 <div>
-                  <div className="font-medium">Set Conditions</div>
-                  <div className="text-muted-foreground">Filter by sender domain, subject keywords, or "sent to" your work email</div>
+                  <div className="font-medium">Create a New Flow</div>
+                  <div className="text-muted-foreground">Click <strong>+ Create</strong> → <strong>Automated cloud flow</strong>. Name it "CRM Email Sync".</div>
                 </div>
               </div>
               <div className="flex gap-3">
                 <span className="w-6 h-6 rounded-full bg-[hsl(215,65%,45%)] text-white flex items-center justify-center text-xs flex-shrink-0">3</span>
                 <div>
-                  <div className="font-medium">Forward to CRM Inbox</div>
-                  <div className="text-muted-foreground">Set the action to forward a copy to: <code className="bg-muted px-1.5 py-0.5 rounded text-xs">crm-intake@your-domain.com</code></div>
+                  <div className="font-medium">Set the Trigger</div>
+                  <div className="text-muted-foreground">Search for <strong>"When a new email arrives (V3)"</strong> under Office 365 Outlook. Set the Folder to <strong>Inbox</strong>. Optionally filter by importance or subject keywords.</div>
                 </div>
               </div>
               <div className="flex gap-3">
                 <span className="w-6 h-6 rounded-full bg-[hsl(215,65%,45%)] text-white flex items-center justify-center text-xs flex-shrink-0">4</span>
                 <div>
-                  <div className="font-medium">Alternative: BCC Method</div>
-                  <div className="text-muted-foreground">BCC the CRM email on outbound messages to automatically log sent emails</div>
+                  <div className="font-medium">Add an HTTP Action</div>
+                  <div className="text-muted-foreground">Click <strong>+ New step</strong> → search <strong>"HTTP"</strong> → select <strong>HTTP</strong> (the built-in one). Configure it:</div>
+                  <div className="mt-2 bg-muted rounded-md p-3 space-y-1.5 text-xs font-mono">
+                    <div><span className="text-muted-foreground">Method:</span> POST</div>
+                    <div><span className="text-muted-foreground">URI:</span> <span className="select-all break-all">https://eastside-crm-production.up.railway.app/api/emails/inbound</span></div>
+                    <div><span className="text-muted-foreground">Headers:</span> Content-Type: application/json</div>
+                    <div className="pt-1"><span className="text-muted-foreground">Body:</span></div>
+                    <pre className="whitespace-pre-wrap text-[11px] bg-background/50 rounded p-2 select-all">{`{
+  "from": "@{triggerOutputs()?['body/from']}",
+  "to": "@{triggerOutputs()?['body/toRecipients']}",
+  "subject": "@{triggerOutputs()?['body/subject']}",
+  "body": "@{triggerOutputs()?['body/bodyPreview']}",
+  "receivedDateTime": "@{triggerOutputs()?['body/receivedDateTime']}",
+  "importance": "@{triggerOutputs()?['body/importance']}",
+  "hasAttachments": @{triggerOutputs()?['body/hasAttachments']}
+}`}</pre>
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <span className="w-6 h-6 rounded-full bg-[hsl(215,65%,45%)] text-white flex items-center justify-center text-xs flex-shrink-0">5</span>
+                <div>
+                  <div className="font-medium">Save & Test</div>
+                  <div className="text-muted-foreground">Click <strong>Save</strong>, then send yourself a test email. It should appear in the Email Log within a minute or two.</div>
                 </div>
               </div>
             </div>
+
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-sm text-emerald-800">
+              <strong>Webhook URL:</strong>{' '}
+              <code className="bg-emerald-100 px-1.5 py-0.5 rounded text-xs select-all break-all">
+                https://eastside-crm-production.up.railway.app/api/emails/inbound
+              </code>
+            </div>
+
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
-              <strong>Tip:</strong> For now, you can manually log emails using the "Log Email" button. When connected to Claude, it can help auto-categorize and link emails to contacts/deals.
+              <strong>Tip:</strong> You can also manually log emails anytime using the "Log Email" button above. The CRM will auto-match incoming emails to contacts by email address.
             </div>
           </div>
         </DialogContent>
