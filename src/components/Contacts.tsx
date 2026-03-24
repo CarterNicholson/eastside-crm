@@ -12,7 +12,7 @@ import type { Store } from '../store';
 import type { Contact, ContactType, Priority, ActivityType, Activity } from '../types';
 import { CONTACT_TYPES } from '../types';
 
-type SortField = 'name' | 'company' | 'title' | 'type' | 'propertyName' | 'email' | 'phone' | 'contactOwner' | 'address' | 'submarket' | 'mobile' | 'notes';
+type SortField = 'name' | 'company' | 'title' | 'type' | 'propertyName' | 'email' | 'phone' | 'contactOwner' | 'address' | 'submarket' | 'mobile' | 'notes' | 'groupNumber' | 'industryType' | 'estimatedSize';
 type SortDir = 'asc' | 'desc';
 
 interface ContactsProps {
@@ -29,15 +29,18 @@ const ALL_COLUMNS = [
   { key: 'type', label: 'Contact Type', width: 'min-w-[100px]' },
   { key: 'propertyName', label: 'Property Name', width: 'min-w-[170px]' },
   { key: 'email', label: 'Email', width: 'min-w-[180px]' },
-  { key: 'phone', label: 'Phone', width: 'min-w-[120px]' },
+  { key: 'phone', label: 'Phone/Direct', width: 'min-w-[120px]' },
+  { key: 'mobile', label: 'Mobile', width: 'min-w-[120px]' },
   { key: 'contactOwner', label: 'Contact Owner', width: 'min-w-[120px]' },
+  { key: 'groupNumber', label: 'Group #', width: 'min-w-[90px]' },
+  { key: 'industryType', label: 'Industry Type', width: 'min-w-[130px]' },
+  { key: 'estimatedSize', label: 'Est. Size (SF)', width: 'min-w-[110px]' },
   { key: 'notes', label: 'Notes', width: 'min-w-[180px]' },
-  { key: 'mobile', label: 'Mobile Phone', width: 'min-w-[120px]' },
   { key: 'submarket', label: 'Submarket', width: 'min-w-[120px]' },
   { key: 'address', label: 'Address', width: 'min-w-[200px]' },
 ] as const;
 
-const DEFAULT_VISIBLE = ['name', 'prospect', 'company', 'title', 'type', 'propertyName', 'email', 'phone', 'contactOwner', 'notes', 'mobile'];
+const DEFAULT_VISIBLE = ['name', 'prospect', 'company', 'title', 'type', 'propertyName', 'email', 'phone', 'mobile', 'contactOwner', 'groupNumber', 'industryType', 'estimatedSize'];
 
 export function Contacts({ store, focusContactId, onFocusHandled }: ContactsProps) {
   const { contacts, addContact, updateContact, deleteContact, getContactDeals, getContactActivities, getContactReminders } = store;
@@ -134,6 +137,9 @@ export function Contacts({ store, focusContactId, onFocusHandled }: ContactsProp
       case 'address': return c.address || '';
       case 'submarket': return c.submarket || c.marketArea || '';
       case 'mobile': return c.mobile || '';
+      case 'groupNumber': return c.groupNumber || '';
+      case 'industryType': return c.industryType || '';
+      case 'estimatedSize': return c.estimatedSize || '';
       case 'notes': return c.notes || '';
       default: return '';
     }
@@ -145,7 +151,7 @@ export function Contacts({ store, focusContactId, onFocusHandled }: ContactsProp
       const matchSearch = search === '' || [
         c.firstName, c.lastName, c.company, c.email, c.phone,
         c.address || '', c.submarket || '', c.marketArea, c.propertyName || '',
-        c.title, c.notes, c.mobile || '',
+        c.title, c.notes, c.mobile || '', c.groupNumber || '', c.industryType || '', c.estimatedSize || '',
       ].some(field => field?.toLowerCase().includes(searchLower));
       const matchType = typeFilter === 'all' || c.type === typeFilter;
       const matchSubmarket = submarketFilter === 'all' || c.submarket === submarketFilter || c.marketArea === submarketFilter;
@@ -346,14 +352,23 @@ export function Contacts({ store, focusContactId, onFocusHandled }: ContactsProp
                   {visibleColumns.includes('phone') && (
                     <td className="px-3 py-2 whitespace-nowrap text-gray-500">{contact.phone || '—'}</td>
                   )}
+                  {visibleColumns.includes('mobile') && (
+                    <td className="px-3 py-2 whitespace-nowrap text-gray-500">{contact.mobile || '—'}</td>
+                  )}
                   {visibleColumns.includes('contactOwner') && (
                     <td className="px-3 py-2 whitespace-nowrap text-gray-500">Carter Nicholson</td>
                   )}
+                  {visibleColumns.includes('groupNumber') && (
+                    <td className="px-3 py-2 whitespace-nowrap text-gray-500">{contact.groupNumber || '—'}</td>
+                  )}
+                  {visibleColumns.includes('industryType') && (
+                    <td className="px-3 py-2 whitespace-nowrap text-gray-500 max-w-[150px] truncate">{contact.industryType || '—'}</td>
+                  )}
+                  {visibleColumns.includes('estimatedSize') && (
+                    <td className="px-3 py-2 whitespace-nowrap text-gray-500">{contact.estimatedSize || '—'}</td>
+                  )}
                   {visibleColumns.includes('notes') && (
                     <td className="px-3 py-2 text-gray-400 max-w-[220px] truncate text-xs">{contact.notes ? `${contact.notes.slice(0, 60)}${contact.notes.length > 60 ? '...' : ''}` : '—'}</td>
-                  )}
-                  {visibleColumns.includes('mobile') && (
-                    <td className="px-3 py-2 whitespace-nowrap text-gray-500">{contact.mobile || '—'}</td>
                   )}
                   {visibleColumns.includes('submarket') && (
                     <td className="px-3 py-2 whitespace-nowrap text-gray-500 max-w-[150px] truncate">{contact.submarket || contact.marketArea || '—'}</td>
@@ -471,10 +486,14 @@ function ContactDetail({ contact, store, onClose, onEdit }: {
 
         {/* Contact Info */}
         <div className="grid grid-cols-2 gap-3 text-sm">
-          <div className="flex items-center gap-2 text-muted-foreground"><Mail size={13} /> <a href={`mailto:${contact.email}`} className="text-[hsl(215,65%,45%)] hover:underline truncate">{contact.email}</a></div>
-          <div className="flex items-center gap-2 text-muted-foreground"><Phone size={13} /> {contact.phone}</div>
+          <div className="flex items-center gap-2 text-muted-foreground"><Mail size={13} /> <a href={`mailto:${contact.email}`} className="text-[hsl(215,65%,45%)] hover:underline truncate">{contact.email || '—'}</a></div>
+          <div className="flex items-center gap-2 text-muted-foreground"><Phone size={13} /> <span>{contact.phone || '—'}</span> <span className="text-[10px] text-gray-400">Direct</span></div>
           <div className="flex items-center gap-2 text-muted-foreground"><Building2 size={13} /> {contact.company}</div>
+          <div className="flex items-center gap-2 text-muted-foreground"><Phone size={13} /> <span>{contact.mobile || '—'}</span> <span className="text-[10px] text-gray-400">Mobile</span></div>
           <div className="flex items-center gap-2 text-muted-foreground"><MapPin size={13} /> {contact.marketArea}</div>
+          {contact.groupNumber && <div className="text-muted-foreground"><span className="text-[10px] uppercase text-gray-400 mr-1">Group #</span> {contact.groupNumber}</div>}
+          {contact.industryType && <div className="text-muted-foreground"><span className="text-[10px] uppercase text-gray-400 mr-1">Industry</span> {contact.industryType}</div>}
+          {contact.estimatedSize && <div className="text-muted-foreground"><span className="text-[10px] uppercase text-gray-400 mr-1">Est. Size</span> {contact.estimatedSize}</div>}
         </div>
 
         {/* AI Insight */}
@@ -766,6 +785,7 @@ function ContactFormDialog({ open, onOpenChange, onSave, title, initialData }: {
     title: initialData?.title || '',
     email: initialData?.email || '',
     phone: initialData?.phone || '',
+    mobile: initialData?.mobile || '',
     type: (initialData?.type || 'prospect') as ContactType,
     priority: (initialData?.priority || 'medium') as Priority,
     marketArea: initialData?.marketArea || '',
@@ -775,6 +795,9 @@ function ContactFormDialog({ open, onOpenChange, onSave, title, initialData }: {
     lastContactedAt: initialData?.lastContactedAt || null,
     nextFollowUp: initialData?.nextFollowUp || null,
     dealIds: initialData?.dealIds || [],
+    groupNumber: initialData?.groupNumber || '',
+    industryType: initialData?.industryType || '',
+    estimatedSize: initialData?.estimatedSize || '',
   });
 
   const handleSave = () => {
@@ -795,9 +818,10 @@ function ContactFormDialog({ open, onOpenChange, onSave, title, initialData }: {
             <div><Label className="text-xs">Company</Label><Input value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} className="mt-1" /></div>
             <div><Label className="text-xs">Title</Label><Input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="mt-1" /></div>
           </div>
+          <div><Label className="text-xs">Email</Label><Input value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className="mt-1" /></div>
           <div className="grid grid-cols-2 gap-3">
-            <div><Label className="text-xs">Email</Label><Input value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className="mt-1" /></div>
-            <div><Label className="text-xs">Phone</Label><Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} className="mt-1" /></div>
+            <div><Label className="text-xs">Phone / Direct</Label><Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} className="mt-1" placeholder="(425) 555-1234" /></div>
+            <div><Label className="text-xs">Mobile</Label><Input value={form.mobile} onChange={e => setForm({ ...form, mobile: e.target.value })} className="mt-1" placeholder="(425) 555-5678" /></div>
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
@@ -819,6 +843,11 @@ function ContactFormDialog({ open, onOpenChange, onSave, title, initialData }: {
               </Select>
             </div>
             <div><Label className="text-xs">Market Area</Label><Input value={form.marketArea} onChange={e => setForm({ ...form, marketArea: e.target.value })} className="mt-1" placeholder="e.g. Bellevue/Kirkland" /></div>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div><Label className="text-xs">Group #</Label><Input value={form.groupNumber} onChange={e => setForm({ ...form, groupNumber: e.target.value })} className="mt-1" placeholder="e.g. 12" /></div>
+            <div><Label className="text-xs">Industry Type</Label><Input value={form.industryType} onChange={e => setForm({ ...form, industryType: e.target.value })} className="mt-1" placeholder="e.g. Manufacturing" /></div>
+            <div><Label className="text-xs">Est. Size (SF)</Label><Input value={form.estimatedSize} onChange={e => setForm({ ...form, estimatedSize: e.target.value })} className="mt-1" placeholder="e.g. 5,000" /></div>
           </div>
           <div><Label className="text-xs">Notes</Label><Textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} className="mt-1" rows={3} /></div>
           <div className="flex justify-end gap-2 pt-2">

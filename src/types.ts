@@ -21,6 +21,9 @@ export interface Contact {
   address?: string;
   submarket?: string;
   propertyName?: string;
+  groupNumber?: string;
+  industryType?: string;
+  estimatedSize?: string;
   createdAt: string;
   lastContactedAt: string | null;
   nextFollowUp: string | null;
