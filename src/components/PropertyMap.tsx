@@ -21,6 +21,15 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 });
 
+interface DotMapOwner {
+  owner: string;
+  contact: string;
+  phone: string;
+  address: string;
+  market: string;
+  source: string;
+}
+
 interface Property {
   key: string;
   name: string;
@@ -29,6 +38,7 @@ interface Property {
   landlords: ContactEntry[];
   tenants: ContactEntry[];
   buyers: ContactEntry[];
+  dotMapOwners: DotMapOwner[];
   totalContacts: number;
   lat: number | null;
   lng: number | null;
@@ -391,7 +401,7 @@ export function PropertyMap({ store, onNavigateToContact }: PropertyMapProps) {
               </div>
             </div>
 
-            {/* Landlords */}
+            {/* Landlords from CRM */}
             {selectedProperty.landlords.length > 0 && (
               <div>
                 <h4 className="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-2 flex items-center gap-1.5">
@@ -402,6 +412,43 @@ export function PropertyMap({ store, onNavigateToContact }: PropertyMapProps) {
                     <ContactCard key={l.id} contact={l} color="purple" onNavigate={onNavigateToContact} />
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Dot Map Ownership Data (from spreadsheets) */}
+            {selectedProperty.dotMapOwners && selectedProperty.dotMapOwners.length > 0 && (
+              <div>
+                <h4 className="text-xs font-semibold text-orange-700 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                  <Building2 size={12} />
+                  {selectedProperty.landlords.length > 0 ? 'Additional Ownership Records' : 'Ownership (Dot Map Records)'}
+                </h4>
+                <div className="space-y-1.5">
+                  {selectedProperty.dotMapOwners.map((o, i) => (
+                    <div
+                      key={`dotmap-${i}`}
+                      className="p-2.5 rounded-lg border-l-[3px] border-l-orange-400 bg-white border border-gray-100"
+                    >
+                      <div className="text-sm font-medium text-orange-800">{o.owner}</div>
+                      {o.contact && <div className="text-[11px] text-muted-foreground">{o.contact}</div>}
+                      {o.phone && (
+                        <div className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                          <Phone size={9} /> {o.phone}
+                        </div>
+                      )}
+                      {o.address && (
+                        <div className="text-[10px] text-gray-400 mt-0.5">{o.address}</div>
+                      )}
+                      <div className="text-[9px] text-gray-300 mt-1 italic">Source: {o.source === 'dot_maps_2022' ? 'Dot Maps 2022' : 'Dot Maps 2019'}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* No ownership data at all */}
+            {selectedProperty.landlords.length === 0 && (!selectedProperty.dotMapOwners || selectedProperty.dotMapOwners.length === 0) && (
+              <div className="bg-gray-50 rounded-lg p-3 text-center">
+                <div className="text-xs text-gray-400">No ownership data available</div>
               </div>
             )}
 

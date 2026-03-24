@@ -853,6 +853,15 @@ async function geocodeAddress(address) {
 }
 
 // Get all properties with geocoded coordinates
+// Load dot map ownership data (from Dot Maps landlord spreadsheets)
+let dotMapOwners = {};
+try {
+  dotMapOwners = JSON.parse(fs.readFileSync(path.join(__dirname, 'public', 'dot-map-owners.json'), 'utf-8'));
+  console.log(`[Map] Loaded dot map ownership data: ${Object.keys(dotMapOwners).length} properties`);
+} catch (err) {
+  console.log('[Map] No dot-map-owners.json found, skipping ownership enrichment');
+}
+
 app.get('/api/map/properties', async (req, res) => {
   const userId = getUserId(req);
   if (!userId) return res.status(401).json({ error: 'Not authenticated' });
@@ -873,11 +882,18 @@ app.get('/api/map/properties', async (req, res) => {
     } catch {}
   }
 
-  // Attach coordinates to properties
+  // Attach coordinates and dot map ownership to properties
   const result = propertyList.map(p => {
     const addrKey = (p.address || '').toLowerCase().trim();
     const coords = geocodeMap[addrKey] || null;
-    return { ...p, lat: coords?.lat || null, lng: coords?.lng || null };
+    const nameKey = (p.name || '').toLowerCase().trim();
+    const dotMapOwnerData = dotMapOwners[nameKey] || [];
+    return {
+      ...p,
+      lat: coords?.lat || null,
+      lng: coords?.lng || null,
+      dotMapOwners: dotMapOwnerData,
+    };
   });
 
   res.json({
