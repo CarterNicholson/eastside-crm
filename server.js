@@ -958,6 +958,33 @@ app.get('/api/map/geocode-status', async (req, res) => {
   });
 });
 
+// Update pin position (drag-to-reposition)
+app.post('/api/map/update-pin', async (req, res) => {
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: 'Not authenticated' });
+
+  const { addressKey, lat, lng } = req.body;
+  if (!addressKey || lat == null || lng == null) {
+    return res.status(400).json({ error: 'addressKey, lat, and lng required' });
+  }
+
+  if (!dbReady) {
+    return res.status(500).json({ error: 'Database not available' });
+  }
+
+  try {
+    await pool.query(
+      `INSERT INTO geocode_cache (address_key, lat, lng) VALUES ($1, $2, $3)
+       ON CONFLICT (address_key) DO UPDATE SET lat = $2, lng = $3`,
+      [addressKey, parseFloat(lat), parseFloat(lng)]
+    );
+    res.json({ status: 'ok', message: 'Pin position updated' });
+  } catch (err) {
+    console.error('[Map] Failed to update pin position:', err);
+    res.status(500).json({ error: 'Failed to save position' });
+  }
+});
+
 // ─── EMAIL ROUTES (user-scoped, now using PostgreSQL) ────────────
 
 app.get('/api/health', async (req, res) => {

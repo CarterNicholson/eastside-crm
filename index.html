@@ -6,6 +6,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
     <title>eastside-crm</title>
+    <style>
+      .satellite-tooltip {
+        background: rgba(0,0,0,0.8) !important;
+        border: 1px solid rgba(255,255,255,0.3) !important;
+        color: #fff !important;
+        border-radius: 6px !important;
+        padding: 6px 10px !important;
+      }
+      .satellite-tooltip .leaflet-tooltip-tip {
+        border-top-color: rgba(0,0,0,0.8) !important;
+      }
+      .custom-marker div {
+        transition: transform 0.15s ease;
+      }
+      .custom-marker:hover div {
+        transform: scale(1.3);
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

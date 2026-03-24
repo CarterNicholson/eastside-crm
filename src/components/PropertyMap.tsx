@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { MapPin, Building2, Users, User, Phone, Mail, ArrowRight, Loader2, X, ChevronRight, Search, RefreshCw, Layers } from 'lucide-react';
+import { MapPin, Building2, Users, User, Phone, Mail, ArrowRight, Loader2, X, ChevronRight, Search, RefreshCw, Layers, GripVertical } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -48,16 +48,17 @@ interface PropertyMapProps {
   onNavigateToContact?: (contactId: string) => void;
 }
 
-// Custom marker icons by type
-function createMarkerIcon(color: string, size: number = 10) {
+// Custom marker icons by type — larger default sizes for satellite visibility
+function createMarkerIcon(color: string, size: number = 16) {
   return L.divIcon({
     className: 'custom-marker',
     html: `<div style="
       width: ${size}px; height: ${size}px;
       background: ${color};
-      border: 2px solid white;
+      border: 2.5px solid white;
       border-radius: 50%;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.45);
+      cursor: grab;
     "></div>`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
@@ -130,10 +131,33 @@ export function PropertyMap({ store, onNavigateToContact }: PropertyMapProps) {
       zoomControl: true,
     });
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    // Satellite imagery from Esri
+    const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      attribution: '&copy; Esri, Maxar, Earthstar Geographics',
+      maxZoom: 19,
+    });
+
+    // Street labels overlay on top of satellite
+    const labels = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19,
+    });
+
+    // Standard street map as alternate
+    const streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors',
       maxZoom: 19,
-    }).addTo(leafletMap.current);
+    });
+
+    // Default to satellite + labels
+    satellite.addTo(leafletMap.current);
+    labels.addTo(leafletMap.current);
+
+    // Layer toggle control
+    L.control.layers(
+      { 'Satellite': satellite, 'Street Map': streets },
+      { 'Street Labels': labels },
+      { position: 'topright', collapsed: true }
+    ).addTo(leafletMap.current);
 
     markersLayer.current = L.layerGroup().addTo(leafletMap.current);
 
@@ -199,24 +223,55 @@ export function PropertyMap({ store, onNavigateToContact }: PropertyMapProps) {
       else if (hasLandlord) color = '#7c3aed'; // purple for landlord only
       else if (hasTenants) color = '#059669'; // green for tenants only
 
-      const size = totalContacts > 5 ? 14 : totalContacts > 2 ? 11 : 8;
+      // Larger pins — scale from 16px up to 22px based on contact count
+      const size = totalContacts > 5 ? 22 : totalContacts > 2 ? 18 : 16;
 
       const marker = L.marker([property.lat, property.lng], {
         icon: createMarkerIcon(color, size),
+        draggable: true,
       });
 
       marker.on('click', () => {
         setSelectedProperty(property);
       });
 
+      // Save new position when pin is dragged
+      marker.on('dragend', async () => {
+        const pos = marker.getLatLng();
+        const token = localStorage.getItem('crm_token') || '';
+        try {
+          await fetch('/api/map/update-pin', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify({
+              addressKey: (property.address || '').toLowerCase().trim(),
+              lat: pos.lat,
+              lng: pos.lng,
+            }),
+          });
+          // Update local state so panel reflects new coords
+          property.lat = pos.lat;
+          property.lng = pos.lng;
+        } catch (err) {
+          console.error('Failed to save pin position:', err);
+        }
+      });
+
       // Tooltip on hover
       marker.bindTooltip(`
         <div style="font-size:12px;max-width:220px">
-          <strong>${property.name || 'Unknown Property'}</strong><br/>
-          <span style="color:#666">${property.address}</span><br/>
-          <span style="color:#888">${property.landlords.length} landlord${property.landlords.length !== 1 ? 's' : ''} · ${property.tenants.length} tenant${property.tenants.length !== 1 ? 's' : ''}</span>
+          <strong style="color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.7)">${property.name || 'Unknown Property'}</strong><br/>
+          <span style="color:#ddd;text-shadow:0 1px 2px rgba(0,0,0,0.7)">${property.address}</span><br/>
+          <span style="color:#bbb;text-shadow:0 1px 2px rgba(0,0,0,0.7)">${property.landlords.length} landlord${property.landlords.length !== 1 ? 's' : ''} · ${property.tenants.length} tenant${property.tenants.length !== 1 ? 's' : ''}</span>
         </div>
-      `, { direction: 'top', offset: [0, -8] });
+      `, {
+        direction: 'top',
+        offset: [0, -8],
+        className: 'satellite-tooltip',
+      });
 
       markersLayer.current!.addLayer(marker);
     });
