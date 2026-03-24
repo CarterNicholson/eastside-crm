@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import {
-  LayoutDashboard, Users, Kanban, Bell, Mail, Sparkles, Calendar,
+  LayoutDashboard, Users, Kanban, Bell, Mail, Sparkles, Calendar, MapPin,
   ChevronLeft, ChevronRight, LogOut
 } from 'lucide-react';
 
-export type Page = 'dashboard' | 'contacts' | 'pipeline' | 'reminders' | 'email' | 'assistant' | 'digest';
+export type Page = 'dashboard' | 'contacts' | 'pipeline' | 'reminders' | 'email' | 'assistant' | 'digest' | 'map';
 
 const NAV_ITEMS: { page: Page; label: string; icon: React.ElementType; badge?: string }[] = [
   { page: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -12,6 +12,7 @@ const NAV_ITEMS: { page: Page; label: string; icon: React.ElementType; badge?: s
   { page: 'pipeline', label: 'Pipeline', icon: Kanban },
   { page: 'reminders', label: 'Follow-Ups', icon: Bell },
   { page: 'email', label: 'Email Log', icon: Mail },
+  { page: 'map', label: 'Property Map', icon: MapPin },
   { page: 'assistant', label: 'AI Assistant', icon: Sparkles },
   { page: 'digest', label: 'Daily Digest', icon: Calendar },
 ];

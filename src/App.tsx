@@ -7,6 +7,7 @@ import { Reminders } from './components/Reminders';
 import { EmailLog } from './components/EmailLog';
 import { Assistant } from './components/Assistant';
 import { DailyDigest } from './components/DailyDigest';
+import { PropertyMap } from './components/PropertyMap';
 import { Login } from './components/Login';
 import { useStore } from './store';
 
@@ -126,6 +127,7 @@ export default function App() {
         {currentPage === 'pipeline' && <Pipeline store={store} />}
         {currentPage === 'reminders' && <Reminders store={store} onNavigateToContact={navigateToContact} />}
         {currentPage === 'email' && <EmailLog store={store} />}
+        {currentPage === 'map' && <PropertyMap store={store} onNavigateToContact={navigateToContact} />}
         {currentPage === 'assistant' && <Assistant store={store} onNavigate={handleNavigate} onNavigateToContact={navigateToContact} />}
         {currentPage === 'digest' && <DailyDigest store={store} />}
       </main>

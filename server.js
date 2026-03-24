@@ -59,7 +59,18 @@ async function initDB() {
 
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_emails_user_id ON emails(user_id)`);
 
-    console.log('[DB] Emails table ready');
+    // Geocode cache table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS geocode_cache (
+        address_key TEXT PRIMARY KEY,
+        lat DOUBLE PRECISION,
+        lng DOUBLE PRECISION,
+        display_name TEXT,
+        geocoded_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    console.log('[DB] Emails + geocode tables ready');
     dbReady = true;
     return true;
   } catch (err) {
@@ -756,6 +767,195 @@ ${overdueReminders.slice(0, 5).map(r => {
     console.error('[AI] Briefing error:', err.message);
     res.status(500).json({ error: 'Failed to generate briefing' });
   }
+});
+
+// ─── MAP / PROPERTIES ROUTES ─────────────────────────────────────
+
+// Build grouped properties from CRM data
+function buildProperties() {
+  const data = loadCRMData();
+  const { contacts } = data;
+  const properties = {};
+
+  contacts.forEach(c => {
+    const key = c.propertyName || c.address || null;
+    if (!key) return;
+    if (!properties[key]) {
+      properties[key] = {
+        name: c.propertyName || '',
+        address: c.address || '',
+        submarket: c.submarket || c.marketArea || '',
+        landlords: [],
+        tenants: [],
+        buyers: [],
+      };
+    }
+    const entry = {
+      id: c.id,
+      name: `${c.firstName} ${c.lastName}`.trim(),
+      company: c.company,
+      phone: c.phone,
+      email: c.email,
+      priority: c.priority,
+    };
+    if (c.type === 'landlord') properties[key].landlords.push(entry);
+    else if (c.type === 'buyer') properties[key].buyers.push(entry);
+    else properties[key].tenants.push(entry);
+  });
+
+  return properties;
+}
+
+// Geocode a single address using Nominatim (free OSM geocoder)
+async function geocodeAddress(address) {
+  if (!address) return null;
+
+  const addressKey = address.toLowerCase().trim();
+
+  // Check DB cache first
+  if (dbReady) {
+    try {
+      const cached = await pool.query('SELECT lat, lng FROM geocode_cache WHERE address_key = $1', [addressKey]);
+      if (cached.rows.length > 0) return { lat: cached.rows[0].lat, lng: cached.rows[0].lng };
+    } catch {}
+  }
+
+  // Call Nominatim API
+  try {
+    const encoded = encodeURIComponent(address);
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encoded}`;
+    const response = await fetch(url, {
+      headers: { 'User-Agent': 'EastsideCRM/1.0 (carter.nicholson@kidder.com)' }
+    });
+    const results = await response.json();
+
+    if (results && results.length > 0) {
+      const { lat, lon } = results[0];
+      const coords = { lat: parseFloat(lat), lng: parseFloat(lon) };
+
+      // Cache in DB
+      if (dbReady) {
+        try {
+          await pool.query(
+            'INSERT INTO geocode_cache (address_key, lat, lng, display_name) VALUES ($1, $2, $3, $4) ON CONFLICT (address_key) DO NOTHING',
+            [addressKey, coords.lat, coords.lng, results[0].display_name || '']
+          );
+        } catch {}
+      }
+
+      return coords;
+    }
+  } catch (err) {
+    console.error('[Geocode] Error:', err.message);
+  }
+
+  return null;
+}
+
+// Get all properties with geocoded coordinates
+app.get('/api/map/properties', async (req, res) => {
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: 'Not authenticated' });
+
+  const properties = buildProperties();
+  const propertyList = Object.entries(properties).map(([key, prop]) => ({
+    key,
+    ...prop,
+    totalContacts: prop.landlords.length + prop.tenants.length + prop.buyers.length,
+  }));
+
+  // Get cached geocode data if available
+  let geocodeMap = {};
+  if (dbReady) {
+    try {
+      const cached = await pool.query('SELECT address_key, lat, lng FROM geocode_cache');
+      cached.rows.forEach(r => { geocodeMap[r.address_key] = { lat: r.lat, lng: r.lng }; });
+    } catch {}
+  }
+
+  // Attach coordinates to properties
+  const result = propertyList.map(p => {
+    const addrKey = (p.address || '').toLowerCase().trim();
+    const coords = geocodeMap[addrKey] || null;
+    return { ...p, lat: coords?.lat || null, lng: coords?.lng || null };
+  });
+
+  res.json({
+    properties: result,
+    totalProperties: result.length,
+    geocoded: result.filter(p => p.lat !== null).length,
+    notGeocoded: result.filter(p => p.lat === null).length,
+  });
+});
+
+// Batch geocode properties (runs in background, returns immediately)
+let geocodingInProgress = false;
+app.post('/api/map/geocode', async (req, res) => {
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: 'Not authenticated' });
+
+  if (geocodingInProgress) {
+    return res.json({ status: 'already_running', message: 'Geocoding is already in progress' });
+  }
+
+  geocodingInProgress = true;
+  res.json({ status: 'started', message: 'Geocoding started in background' });
+
+  // Run geocoding in background
+  const properties = buildProperties();
+  const addresses = [...new Set(Object.values(properties).map(p => p.address).filter(Boolean))];
+
+  let geocoded = 0, skipped = 0, failed = 0;
+  console.log(`[Geocode] Starting batch geocode of ${addresses.length} addresses`);
+
+  for (const address of addresses) {
+    const addrKey = address.toLowerCase().trim();
+
+    // Check if already cached
+    if (dbReady) {
+      try {
+        const cached = await pool.query('SELECT 1 FROM geocode_cache WHERE address_key = $1', [addrKey]);
+        if (cached.rows.length > 0) { skipped++; continue; }
+      } catch {}
+    }
+
+    const coords = await geocodeAddress(address);
+    if (coords) {
+      geocoded++;
+    } else {
+      failed++;
+    }
+
+    // Nominatim rate limit: 1 request per second
+    await new Promise(r => setTimeout(r, 1100));
+
+    if ((geocoded + failed) % 50 === 0) {
+      console.log(`[Geocode] Progress: ${geocoded} geocoded, ${failed} failed, ${skipped} skipped of ${addresses.length}`);
+    }
+  }
+
+  console.log(`[Geocode] Complete: ${geocoded} geocoded, ${failed} failed, ${skipped} already cached`);
+  geocodingInProgress = false;
+});
+
+// Get geocoding status
+app.get('/api/map/geocode-status', async (req, res) => {
+  let cachedCount = 0;
+  if (dbReady) {
+    try {
+      const result = await pool.query('SELECT COUNT(*) FROM geocode_cache');
+      cachedCount = parseInt(result.rows[0].count, 10);
+    } catch {}
+  }
+  const properties = buildProperties();
+  const totalAddresses = new Set(Object.values(properties).map(p => p.address).filter(Boolean)).size;
+
+  res.json({
+    inProgress: geocodingInProgress,
+    cached: cachedCount,
+    total: totalAddresses,
+    percent: totalAddresses > 0 ? Math.round((cachedCount / totalAddresses) * 100) : 0,
+  });
 });
 
 // ─── EMAIL ROUTES (user-scoped, now using PostgreSQL) ────────────
