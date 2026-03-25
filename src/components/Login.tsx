@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Loader2 } from 'lucide-react';
 
 interface LoginProps {
   onLogin: (user: { id: string; name: string; email: string; role: string }, token: string) => void;
@@ -34,7 +34,6 @@ export function Login({ onLogin }: LoginProps) {
         return;
       }
 
-      // Store token
       localStorage.setItem('crm_token', data.token);
       localStorage.setItem('crm_user', JSON.stringify(data.user));
       onLogin(data.user, data.token);
@@ -45,43 +44,61 @@ export function Login({ onLogin }: LoginProps) {
   };
 
   return (
-    <div className="flex h-screen items-center justify-center bg-gradient-to-br from-gray-50 to-blue-50">
-      <Card className="w-[400px] shadow-lg">
-        <CardHeader className="text-center pb-4">
-          <div className="mx-auto w-12 h-12 rounded-xl bg-[hsl(215,65%,45%)] flex items-center justify-center mb-3">
-            <span className="text-white text-lg font-bold">EC</span>
+    <div className="flex h-screen items-center justify-center relative overflow-hidden"
+      style={{ background: 'linear-gradient(135deg, hsl(222, 47%, 8%) 0%, hsl(224, 50%, 14%) 50%, hsl(220, 45%, 10%) 100%)' }}>
+
+      {/* Subtle gradient orbs */}
+      <div className="absolute top-[-20%] right-[-10%] w-[500px] h-[500px] rounded-full opacity-[0.08]"
+        style={{ background: 'radial-gradient(circle, hsl(220, 70%, 50%), transparent 70%)' }} />
+      <div className="absolute bottom-[-15%] left-[-10%] w-[400px] h-[400px] rounded-full opacity-[0.06]"
+        style={{ background: 'radial-gradient(circle, hsl(250, 60%, 50%), transparent 70%)' }} />
+
+      <div className="relative z-10 w-[380px]">
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <div className="mx-auto w-14 h-14 rounded-2xl flex items-center justify-center mb-5 shadow-lg shadow-blue-500/20"
+            style={{ background: 'linear-gradient(135deg, hsl(220, 70%, 55%), hsl(250, 60%, 50%))' }}>
+            <span className="text-white text-xl font-bold tracking-tight">EC</span>
           </div>
-          <CardTitle className="text-xl">Eastside CRM</CardTitle>
-          <p className="text-sm text-muted-foreground mt-1">Kidder Mathews</p>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <h1 className="text-2xl font-semibold text-white tracking-tight">Eastside CRM</h1>
+          <p className="text-sm text-white/30 mt-1 font-medium">Kidder Mathews</p>
+        </div>
+
+        {/* Card */}
+        <div className="rounded-2xl p-8"
+          style={{
+            background: 'rgba(255, 255, 255, 0.04)',
+            backdropFilter: 'blur(40px)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)',
+          }}>
+          <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <Label className="text-xs">Email</Label>
+              <Label className="text-xs font-medium text-white/40 uppercase tracking-wider">Email</Label>
               <Input
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                placeholder="you@email.com"
-                className="mt-1"
+                placeholder="you@kidder.com"
+                className="mt-2 h-11 bg-white/[0.06] border-white/[0.08] text-white placeholder:text-white/20 rounded-xl focus:bg-white/[0.08] focus:border-blue-500/50 focus:ring-blue-500/20"
                 autoFocus
                 required
               />
             </div>
             <div>
-              <Label className="text-xs">Password</Label>
+              <Label className="text-xs font-medium text-white/40 uppercase tracking-wider">Password</Label>
               <Input
                 type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 placeholder="Enter password"
-                className="mt-1"
+                className="mt-2 h-11 bg-white/[0.06] border-white/[0.08] text-white placeholder:text-white/20 rounded-xl focus:bg-white/[0.08] focus:border-blue-500/50 focus:ring-blue-500/20"
                 required
               />
             </div>
 
             {error && (
-              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+              <div className="text-sm text-red-300 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
                 {error}
               </div>
             )}
@@ -89,13 +106,18 @@ export function Login({ onLogin }: LoginProps) {
             <Button
               type="submit"
               disabled={loading}
-              className="w-full bg-[hsl(215,65%,45%)] hover:bg-[hsl(215,65%,40%)]"
+              className="w-full h-11 rounded-xl text-sm font-semibold shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transition-all duration-200"
+              style={{ background: 'linear-gradient(135deg, hsl(220, 70%, 55%), hsl(250, 60%, 50%))' }}
             >
-              {loading ? 'Signing in...' : 'Sign In'}
+              {loading ? <><Loader2 size={16} className="animate-spin mr-2" /> Signing in...</> : 'Sign In'}
             </Button>
           </form>
-        </CardContent>
-      </Card>
+        </div>
+
+        <p className="text-center text-[11px] text-white/15 mt-6 font-medium">
+          Commercial Real Estate Intelligence Platform
+        </p>
+      </div>
     </div>
   );
 }

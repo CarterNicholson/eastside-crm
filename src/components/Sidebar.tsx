@@ -42,22 +42,31 @@ export function Sidebar({ currentPage, onNavigate, reminderCount, suggestionCoun
     : 'U';
 
   return (
-    <div className={`flex flex-col border-r border-border bg-white transition-all duration-200 ${collapsed ? 'w-16' : 'w-56'}`}>
+    <div
+      className={`flex flex-col transition-all duration-300 ease-in-out dark-scroll ${collapsed ? 'w-[68px]' : 'w-[240px]'}`}
+      style={{
+        background: 'linear-gradient(180deg, hsl(222, 47%, 11%) 0%, hsl(224, 50%, 8%) 100%)',
+      }}
+    >
       {/* Logo */}
-      <div className="flex items-center gap-2 px-4 py-4 border-b border-border">
-        <div className="w-8 h-8 rounded bg-[hsl(215,65%,45%)] flex items-center justify-center flex-shrink-0">
-          <span className="text-white text-sm font-bold">EC</span>
+      <div className={`flex items-center gap-3 px-4 py-5 ${collapsed ? 'justify-center' : ''}`}>
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+          style={{ background: 'linear-gradient(135deg, hsl(220, 70%, 55%), hsl(250, 60%, 50%))' }}>
+          <span className="text-white text-sm font-bold tracking-tight">EC</span>
         </div>
         {!collapsed && (
           <div className="overflow-hidden">
-            <div className="text-sm font-semibold text-foreground leading-tight">Eastside CRM</div>
-            <div className="text-[10px] text-muted-foreground">Kidder Mathews</div>
+            <div className="text-[13px] font-semibold text-white leading-tight tracking-tight">Eastside CRM</div>
+            <div className="text-[10px] text-white/40 font-medium">Kidder Mathews</div>
           </div>
         )}
       </div>
 
+      {/* Divider */}
+      <div className="mx-4 border-t border-white/[0.06]" />
+
       {/* Nav */}
-      <nav className="flex-1 py-2 px-2 space-y-0.5">
+      <nav className="flex-1 py-3 px-3 space-y-0.5 overflow-y-auto dark-scroll">
         {NAV_ITEMS.map(({ page, label, icon: Icon }) => {
           const isActive = currentPage === page;
           const badge = getBadge(page);
@@ -65,19 +74,22 @@ export function Sidebar({ currentPage, onNavigate, reminderCount, suggestionCoun
             <button
               key={page}
               onClick={() => onNavigate(page)}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded text-sm transition-colors ${
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] transition-all duration-150 ${
                 isActive
-                  ? 'bg-[hsl(215,65%,45%)]/10 text-[hsl(215,65%,45%)] font-medium'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  ? 'bg-white/[0.1] text-white font-medium shadow-sm'
+                  : 'text-white/50 hover:bg-white/[0.06] hover:text-white/80'
               }`}
+              style={isActive ? { backdropFilter: 'blur(10px)' } : {}}
             >
-              <Icon size={18} className="flex-shrink-0" />
+              <Icon size={17} className={`flex-shrink-0 ${isActive ? 'text-blue-400' : ''}`} />
               {!collapsed && (
                 <>
                   <span className="flex-1 text-left">{label}</span>
                   {badge && (
-                    <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-medium ${
-                      page === 'assistant' ? 'bg-amber-100 text-amber-700' : 'bg-[hsl(215,65%,45%)]/15 text-[hsl(215,65%,45%)]'
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold min-w-[20px] text-center ${
+                      page === 'assistant'
+                        ? 'bg-amber-500/20 text-amber-300'
+                        : 'bg-blue-500/20 text-blue-300'
                     }`}>
                       {badge}
                     </span>
@@ -91,21 +103,22 @@ export function Sidebar({ currentPage, onNavigate, reminderCount, suggestionCoun
 
       {/* User & Logout */}
       {user && (
-        <div className="px-2 py-2 border-t border-border">
-          <div className={`flex items-center gap-2.5 px-2 py-1.5 ${collapsed ? 'justify-center' : ''}`}>
-            <div className="w-7 h-7 rounded-full bg-[hsl(215,65%,45%)]/15 flex items-center justify-center text-[10px] font-bold text-[hsl(215,65%,45%)] flex-shrink-0">
-              {initials}
+        <div className="px-3 py-3 border-t border-white/[0.06]">
+          <div className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg ${collapsed ? 'justify-center' : ''}`}>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+              style={{ background: 'linear-gradient(135deg, hsl(220, 70%, 55%), hsl(250, 60%, 50%))' }}>
+              <span className="text-white">{initials}</span>
             </div>
             {!collapsed && (
               <div className="flex-1 min-w-0">
-                <div className="text-xs font-medium truncate">{user.name}</div>
-                <div className="text-[10px] text-muted-foreground truncate">{user.role}</div>
+                <div className="text-xs font-medium text-white/80 truncate">{user.name}</div>
+                <div className="text-[10px] text-white/30 truncate">{user.role}</div>
               </div>
             )}
             {!collapsed && onLogout && (
               <button
                 onClick={onLogout}
-                className="text-muted-foreground hover:text-foreground transition-colors p-1"
+                className="text-white/30 hover:text-white/60 transition-colors p-1 rounded hover:bg-white/[0.06]"
                 title="Sign out"
               >
                 <LogOut size={14} />
@@ -116,10 +129,10 @@ export function Sidebar({ currentPage, onNavigate, reminderCount, suggestionCoun
       )}
 
       {/* Collapse toggle */}
-      <div className="px-2 py-3 border-t border-border">
+      <div className="px-3 py-3 border-t border-white/[0.06]">
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="w-full flex items-center justify-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground rounded hover:bg-muted transition-colors"
+          className="w-full flex items-center justify-center gap-2 px-3 py-1.5 text-[11px] text-white/30 hover:text-white/50 rounded-lg hover:bg-white/[0.04] transition-all"
         >
           {collapsed ? <ChevronRight size={14} /> : <><ChevronLeft size={14} /> <span>Collapse</span></>}
         </button>

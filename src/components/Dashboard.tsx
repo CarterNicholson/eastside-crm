@@ -73,54 +73,53 @@ export function Dashboard({ store, onNavigate }: DashboardProps) {
   };
 
   return (
-    <div className="p-6 space-y-6 max-w-[1400px]">
+    <div className="p-8 space-y-7 max-w-[1400px]">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-semibold text-foreground">Good {getGreeting()}, Carter</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
+        <h1 className="text-2xl font-semibold text-foreground tracking-tight">Good {getGreeting()}, Carter</h1>
+        <p className="text-sm text-muted-foreground mt-1">
           {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
         </p>
       </div>
 
       {/* AI Daily Briefing */}
-      <Card className="border-amber-200 bg-gradient-to-r from-amber-50/50 to-orange-50/30">
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Sparkles size={15} className="text-amber-500" />
-              AI Daily Briefing
-            </CardTitle>
-            <div className="flex items-center gap-2">
-              <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-muted-foreground" onClick={loadBriefing} disabled={briefingLoading}>
-                <RefreshCw size={11} className={briefingLoading ? 'animate-spin' : ''} /> Refresh
-              </Button>
-              <button onClick={() => onNavigate('assistant')} className="text-xs text-[hsl(215,65%,45%)] hover:underline flex items-center gap-1">
-                Open Assistant <ArrowRight size={12} />
-              </button>
+      <div className="rounded-2xl p-5 border border-amber-200/60"
+        style={{ background: 'linear-gradient(135deg, rgba(251,191,36,0.06) 0%, rgba(249,115,22,0.04) 100%)' }}>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(38, 92%, 50%), hsl(25, 95%, 53%))' }}>
+              <Sparkles size={13} className="text-white" />
             </div>
+            <span className="text-sm font-semibold text-foreground">AI Daily Briefing</span>
           </div>
-        </CardHeader>
-        <CardContent className="pt-0">
-          {briefingLoading && !briefing && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground py-3">
-              <Loader2 size={14} className="animate-spin text-amber-500" />
-              Generating your daily briefing...
-            </div>
-          )}
-          {briefingError && !briefing && (
-            <div className="text-sm text-muted-foreground py-2">
-              {briefingError.includes('not configured')
-                ? 'Add your ANTHROPIC_API_KEY in Railway to enable AI briefings.'
-                : 'Could not load briefing. Click refresh to try again.'}
-            </div>
-          )}
-          {briefing && (
-            <div className="space-y-1 leading-relaxed">
-              {renderBriefing(briefing)}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground" onClick={loadBriefing} disabled={briefingLoading}>
+              <RefreshCw size={11} className={briefingLoading ? 'animate-spin' : ''} /> Refresh
+            </Button>
+            <button onClick={() => onNavigate('assistant')} className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-medium">
+              Open Assistant <ArrowRight size={12} />
+            </button>
+          </div>
+        </div>
+        {briefingLoading && !briefing && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground py-3">
+            <Loader2 size={14} className="animate-spin text-amber-500" />
+            Generating your daily briefing...
+          </div>
+        )}
+        {briefingError && !briefing && (
+          <div className="text-sm text-muted-foreground py-2">
+            {briefingError.includes('not configured')
+              ? 'Add your ANTHROPIC_API_KEY in Railway to enable AI briefings.'
+              : 'Could not load briefing. Click refresh to try again.'}
+          </div>
+        )}
+        {briefing && (
+          <div className="space-y-1 leading-relaxed">
+            {renderBriefing(briefing)}
+          </div>
+        )}
+      </div>
 
       {/* Stat Cards */}
       <div className="grid grid-cols-4 gap-4">
@@ -299,28 +298,26 @@ function StatCard({ icon: Icon, label, value, sub, color }: {
   icon: React.ElementType; label: string; value: number; sub: string;
   color: 'blue' | 'teal' | 'amber' | 'red' | 'green';
 }) {
-  const colors = {
-    blue: 'bg-blue-50 text-blue-600',
-    teal: 'bg-teal-50 text-teal-600',
-    amber: 'bg-amber-50 text-amber-600',
-    red: 'bg-red-50 text-red-600',
-    green: 'bg-green-50 text-green-600',
+  const gradients: Record<string, string> = {
+    blue: 'linear-gradient(135deg, hsl(220, 70%, 55%), hsl(250, 60%, 50%))',
+    teal: 'linear-gradient(135deg, hsl(160, 50%, 42%), hsl(170, 55%, 35%))',
+    amber: 'linear-gradient(135deg, hsl(38, 92%, 50%), hsl(25, 95%, 53%))',
+    red: 'linear-gradient(135deg, hsl(0, 65%, 51%), hsl(350, 70%, 45%))',
+    green: 'linear-gradient(135deg, hsl(150, 50%, 42%), hsl(160, 55%, 38%))',
   };
   return (
-    <Card className="relative overflow-hidden">
-      <CardContent className="pt-4 pb-3 px-4">
-        <div className="flex items-start justify-between">
-          <div>
-            <div className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{label}</div>
-            <div className="text-2xl font-bold mt-1 text-foreground">{value}</div>
-            <div className="text-xs text-muted-foreground mt-0.5">{sub}</div>
-          </div>
-          <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${colors[color]}`}>
-            <Icon size={18} />
-          </div>
+    <div className="premium-card rounded-xl p-5 relative overflow-hidden">
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">{label}</div>
+          <div className="text-2xl font-bold mt-1.5 text-foreground tracking-tight">{value.toLocaleString()}</div>
+          <div className="text-[11px] text-muted-foreground mt-1 font-medium">{sub}</div>
         </div>
-      </CardContent>
-    </Card>
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-sm" style={{ background: gradients[color] }}>
+          <Icon size={18} className="text-white" />
+        </div>
+      </div>
+    </div>
   );
 }
 

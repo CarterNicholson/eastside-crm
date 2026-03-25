@@ -1,33 +1,42 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 210 20% 98%;
-    --foreground: 215 25% 15%;
+    --background: 220 14% 96%;
+    --foreground: 220 20% 10%;
     --card: 0 0% 100%;
-    --card-foreground: 215 25% 15%;
+    --card-foreground: 220 20% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 215 25% 15%;
-    --primary: 215 65% 45%;
+    --popover-foreground: 220 20% 10%;
+    --primary: 220 70% 50%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 210 15% 93%;
-    --secondary-foreground: 215 25% 25%;
-    --muted: 210 15% 95%;
-    --muted-foreground: 215 10% 45%;
-    --accent: 160 50% 42%;
+    --secondary: 220 14% 92%;
+    --secondary-foreground: 220 20% 25%;
+    --muted: 220 14% 94%;
+    --muted-foreground: 220 10% 46%;
+    --accent: 160 45% 40%;
     --accent-foreground: 0 0% 100%;
-    --destructive: 0 72% 51%;
+    --destructive: 0 65% 51%;
     --destructive-foreground: 0 0% 100%;
-    --border: 214 20% 88%;
-    --input: 214 20% 88%;
-    --ring: 215 65% 45%;
-    --radius: 0.375rem;
+    --border: 220 13% 90%;
+    --input: 220 13% 90%;
+    --ring: 220 70% 50%;
+    --radius: 0.5rem;
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
-    --success: 160 50% 42%;
+    --success: 160 45% 40%;
     --success-foreground: 0 0% 100%;
+
+    /* Premium sidebar */
+    --sidebar-bg: 222 47% 11%;
+    --sidebar-fg: 220 14% 96%;
+    --sidebar-muted: 220 14% 60%;
+    --sidebar-active: 220 70% 50%;
+    --sidebar-hover: 222 47% 16%;
   }
 }
 
@@ -36,17 +45,88 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: -0.01em;
   }
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar { width: 6px; height: 6px; }
+/* Premium scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground)); }
+::-webkit-scrollbar-thumb { background: hsl(220, 13%, 82%); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: hsl(220, 10%, 60%); }
 
-/* Pipeline drag styles */
-.pipeline-card { transition: box-shadow 0.15s ease, transform 0.15s ease; }
-.pipeline-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); transform: translateY(-1px); }
+/* Dark scrollbar for sidebar */
+.dark-scroll::-webkit-scrollbar-thumb { background: hsl(222, 47%, 22%); }
+.dark-scroll::-webkit-scrollbar-thumb:hover { background: hsl(222, 47%, 30%); }
+
+/* Pipeline */
+.pipeline-card {
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+.pipeline-card:hover {
+  box-shadow: 0 8px 25px -5px rgba(0, 0, 0, 0.08), 0 4px 10px -6px rgba(0, 0, 0, 0.04);
+  transform: translateY(-2px);
+}
+
+/* Premium card style */
+.premium-card {
+  background: white;
+  border: 1px solid hsl(220, 13%, 92%);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  transition: box-shadow 0.2s ease, transform 0.15s ease;
+}
+.premium-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06), 0 2px 4px rgba(0, 0, 0, 0.03);
+}
+
+/* Glass effect */
+.glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Subtle gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, hsl(220, 70%, 50%), hsl(250, 60%, 55%));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Smooth transitions globally */
+button, a, input, select, textarea {
+  transition: all 0.15s ease;
+}
+
+/* Premium table styles */
+table thead th {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  font-size: 10px;
+}
+
+/* Animated loading spinner */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.shimmer {
+  background: linear-gradient(90deg, hsl(220, 14%, 94%) 25%, hsl(220, 14%, 88%) 50%, hsl(220, 14%, 94%) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Focus ring style */
+*:focus-visible {
+  outline: 2px solid hsl(220, 70%, 50%);
+  outline-offset: 2px;
+  border-radius: 4px;
+}

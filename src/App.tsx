@@ -87,8 +87,8 @@ export default function App() {
   // Show nothing while checking auth
   if (!authChecked) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent" />
+      <div className="flex h-screen items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(222, 47%, 8%) 0%, hsl(224, 50%, 14%) 100%)' }}>
+        <div className="inline-block h-8 w-8 animate-spin rounded-full border-[3px] border-blue-500 border-r-transparent" />
       </div>
     );
   }
@@ -100,18 +100,22 @@ export default function App() {
 
   if (store.isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
+      <div className="flex h-screen items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(222, 47%, 8%) 0%, hsl(224, 50%, 14%) 100%)' }}>
         <div className="text-center">
-          <div className="inline-block h-10 w-10 animate-spin rounded-full border-4 border-primary border-r-transparent mb-4" />
-          <p className="text-muted-foreground text-sm">Loading your CRM data...</p>
-          <p className="text-muted-foreground text-xs mt-1">5,000+ contacts</p>
+          <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-5 mx-auto shadow-lg shadow-blue-500/20"
+            style={{ background: 'linear-gradient(135deg, hsl(220, 70%, 55%), hsl(250, 60%, 50%))' }}>
+            <span className="text-white text-lg font-bold">EC</span>
+          </div>
+          <div className="inline-block h-6 w-6 animate-spin rounded-full border-[3px] border-blue-400 border-r-transparent mb-4" />
+          <p className="text-white/50 text-sm font-medium">Loading your CRM data...</p>
+          <p className="text-white/25 text-xs mt-1">5,000+ contacts</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
+    <div className="flex h-screen overflow-hidden" style={{ background: 'hsl(220, 14%, 96%)' }}>
       <Sidebar
         currentPage={currentPage}
         onNavigate={handleNavigate}
