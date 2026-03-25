@@ -1,15 +1,21 @@
-import { useState, useMemo } from 'react';
-import { Check, X, Clock, AlertTriangle, Plus, Calendar, Filter } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState, useMemo, useEffect } from 'react';
+import { Check, X, Clock, AlertTriangle, Plus, Calendar, Pencil, User } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { Store } from '../store';
-import type { Priority, ReminderStatus } from '../types';
+import type { Priority, ReminderStatus, Reminder } from '../types';
+
+interface TeamMember {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+}
 
 interface RemindersProps {
   store: Store;
@@ -17,11 +23,24 @@ interface RemindersProps {
 }
 
 export function Reminders({ store, onNavigateToContact }: RemindersProps) {
-  const { reminders, contacts, completeReminder, dismissReminder, addReminder, getContact } = store;
+  const { reminders, contacts, completeReminder, dismissReminder, addReminder, updateReminder, getContact } = store;
   const [filter, setFilter] = useState<'all' | 'pending' | 'overdue' | 'completed'>('pending');
   const [showAdd, setShowAdd] = useState(false);
+  const [editingReminder, setEditingReminder] = useState<Reminder | null>(null);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
 
   const today = new Date().toISOString().split('T')[0];
+
+  // Load team members
+  useEffect(() => {
+    const token = localStorage.getItem('crm_token') || '';
+    if (token) {
+      fetch('/api/auth/users', { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? r.json() : [])
+        .then(setTeamMembers)
+        .catch(() => {});
+    }
+  }, []);
 
   const filtered = useMemo(() => {
     let result = [...reminders];
@@ -29,7 +48,6 @@ export function Reminders({ store, onNavigateToContact }: RemindersProps) {
     if (filter === 'overdue') result = result.filter(r => r.status === 'pending' && r.dueDate < today);
     if (filter === 'completed') result = result.filter(r => r.status === 'completed');
     return result.sort((a, b) => {
-      // Overdue first, then by priority, then by date
       const aOverdue = a.dueDate < today && a.status === 'pending' ? 0 : 1;
       const bOverdue = b.dueDate < today && b.status === 'pending' ? 0 : 1;
       if (aOverdue !== bOverdue) return aOverdue - bOverdue;
@@ -111,7 +129,7 @@ export function Reminders({ store, onNavigateToContact }: RemindersProps) {
                       }`}>{r.priority}</span>
                     </div>
                     <div className="text-xs text-muted-foreground mt-0.5">{r.description}</div>
-                    <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground flex-wrap">
                       {contact && (
                         <button
                           onClick={(e) => { e.stopPropagation(); onNavigateToContact?.(r.contactId); }}
@@ -124,20 +142,31 @@ export function Reminders({ store, onNavigateToContact }: RemindersProps) {
                         <Calendar size={10} />
                         {isOverdue ? `Overdue (${formatDate(r.dueDate)})` : isToday ? 'Due today' : `Due ${formatDate(r.dueDate)}`}
                       </span>
+                      {r.assignedName && (
+                        <span className="flex items-center gap-1 text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded">
+                          <User size={10} />
+                          {r.assignedName}
+                        </span>
+                      )}
                     </div>
                   </div>
 
                   {/* Actions */}
-                  {r.status === 'pending' && (
-                    <div className="flex gap-1">
-                      <Button size="sm" variant="outline" onClick={() => completeReminder(r.id)} className="h-7 w-7 p-0 text-green-600 hover:bg-green-50">
-                        <Check size={13} />
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => dismissReminder(r.id)} className="h-7 w-7 p-0 text-muted-foreground">
-                        <X size={13} />
-                      </Button>
-                    </div>
-                  )}
+                  <div className="flex gap-1">
+                    {r.status === 'pending' && (
+                      <>
+                        <Button size="sm" variant="ghost" onClick={() => setEditingReminder(r)} className="h-7 w-7 p-0 text-muted-foreground hover:text-blue-600">
+                          <Pencil size={13} />
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => completeReminder(r.id)} className="h-7 w-7 p-0 text-green-600 hover:bg-green-50">
+                          <Check size={13} />
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => dismissReminder(r.id)} className="h-7 w-7 p-0 text-muted-foreground">
+                          <X size={13} />
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -146,26 +175,99 @@ export function Reminders({ store, onNavigateToContact }: RemindersProps) {
       </div>
 
       {/* Add Reminder Dialog */}
-      <AddReminderDialog open={showAdd} onOpenChange={setShowAdd} store={store} onSave={(data) => { addReminder(data); setShowAdd(false); }} />
+      <ReminderDialog
+        open={showAdd}
+        onOpenChange={setShowAdd}
+        store={store}
+        teamMembers={teamMembers}
+        onSave={(data) => { addReminder(data); setShowAdd(false); }}
+      />
+
+      {/* Edit Reminder Dialog */}
+      {editingReminder && (
+        <ReminderDialog
+          open={!!editingReminder}
+          onOpenChange={(open) => { if (!open) setEditingReminder(null); }}
+          store={store}
+          teamMembers={teamMembers}
+          existingReminder={editingReminder}
+          onSave={(data) => {
+            updateReminder(editingReminder.id, data);
+            setEditingReminder(null);
+          }}
+        />
+      )}
     </div>
   );
 }
 
-function AddReminderDialog({ open, onOpenChange, store, onSave }: {
-  open: boolean; onOpenChange: (open: boolean) => void; store: Store; onSave: (data: any) => void;
+function ReminderDialog({ open, onOpenChange, store, teamMembers, existingReminder, onSave }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  store: Store;
+  teamMembers: TeamMember[];
+  existingReminder?: Reminder;
+  onSave: (data: any) => void;
 }) {
+  const isEdit = !!existingReminder;
+
   const [form, setForm] = useState({
-    contactId: '', dealId: undefined as string | undefined, title: '', description: '',
-    dueDate: '', priority: 'medium' as Priority, status: 'pending' as ReminderStatus, isAutoGenerated: false,
+    contactId: existingReminder?.contactId || '',
+    dealId: existingReminder?.dealId || undefined as string | undefined,
+    title: existingReminder?.title || '',
+    description: existingReminder?.description || '',
+    dueDate: existingReminder?.dueDate || '',
+    priority: (existingReminder?.priority || 'medium') as Priority,
+    status: (existingReminder?.status || 'pending') as ReminderStatus,
+    isAutoGenerated: existingReminder?.isAutoGenerated || false,
+    assignedTo: existingReminder?.assignedTo || '',
+    assignedName: existingReminder?.assignedName || '',
   });
+
+  // Reset form when dialog opens with new data
+  useEffect(() => {
+    if (open) {
+      setForm({
+        contactId: existingReminder?.contactId || '',
+        dealId: existingReminder?.dealId || undefined,
+        title: existingReminder?.title || '',
+        description: existingReminder?.description || '',
+        dueDate: existingReminder?.dueDate || '',
+        priority: (existingReminder?.priority || 'medium') as Priority,
+        status: (existingReminder?.status || 'pending') as ReminderStatus,
+        isAutoGenerated: existingReminder?.isAutoGenerated || false,
+        assignedTo: existingReminder?.assignedTo || '',
+        assignedName: existingReminder?.assignedName || '',
+      });
+    }
+  }, [open, existingReminder]);
+
+  const handleAssigneeChange = (userId: string) => {
+    if (userId === '__unassigned__') {
+      setForm({ ...form, assignedTo: '', assignedName: '' });
+    } else {
+      const member = teamMembers.find(m => m.id === userId);
+      setForm({
+        ...form,
+        assignedTo: userId,
+        assignedName: member?.name || '',
+      });
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>New Reminder</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{isEdit ? 'Edit Reminder' : 'New Reminder'}</DialogTitle></DialogHeader>
         <div className="space-y-3">
-          <div><Label className="text-xs">Title *</Label><Input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="mt-1" /></div>
-          <div><Label className="text-xs">Description</Label><Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="mt-1" rows={2} /></div>
+          <div>
+            <Label className="text-xs">Title *</Label>
+            <Input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="mt-1" />
+          </div>
+          <div>
+            <Label className="text-xs">Description</Label>
+            <Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="mt-1" rows={2} />
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">Contact</Label>
@@ -186,10 +288,35 @@ function AddReminderDialog({ open, onOpenChange, store, onSave }: {
               </Select>
             </div>
           </div>
-          <div><Label className="text-xs">Due Date *</Label><Input type="date" value={form.dueDate} onChange={e => setForm({ ...form, dueDate: e.target.value })} className="mt-1" /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Due Date *</Label>
+              <Input type="date" value={form.dueDate} onChange={e => setForm({ ...form, dueDate: e.target.value })} className="mt-1" />
+            </div>
+            <div>
+              <Label className="text-xs flex items-center gap-1">
+                <User size={11} className="text-purple-500" />
+                Assign To
+              </Label>
+              <Select value={form.assignedTo || '__unassigned__'} onValueChange={handleAssigneeChange}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Unassigned" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__unassigned__">Unassigned</SelectItem>
+                  {teamMembers.map(m => (
+                    <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button onClick={() => { if (form.title && form.dueDate) onSave(form); }} className="bg-[hsl(215,65%,45%)] hover:bg-[hsl(215,65%,40%)]">Save</Button>
+            <Button
+              onClick={() => { if (form.title && form.dueDate) onSave(form); }}
+              className="bg-[hsl(215,65%,45%)] hover:bg-[hsl(215,65%,40%)]"
+            >
+              {isEdit ? 'Save Changes' : 'Save'}
+            </Button>
           </div>
         </div>
       </DialogContent>

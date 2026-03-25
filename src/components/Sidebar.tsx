@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import {
-  LayoutDashboard, Users, Kanban, Bell, Mail, Sparkles, Calendar, MapPin,
+  LayoutDashboard, Users, Kanban, Bell, Mail, Sparkles, MapPin,
   ChevronLeft, ChevronRight, LogOut, Shield
 } from 'lucide-react';
 
-export type Page = 'dashboard' | 'contacts' | 'pipeline' | 'reminders' | 'email' | 'assistant' | 'digest' | 'map' | 'team';
+export type Page = 'dashboard' | 'contacts' | 'pipeline' | 'reminders' | 'email' | 'assistant' | 'map' | 'team';
 
 const NAV_ITEMS: { page: Page; label: string; icon: React.ElementType; badge?: string }[] = [
   { page: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -14,7 +14,6 @@ const NAV_ITEMS: { page: Page; label: string; icon: React.ElementType; badge?: s
   { page: 'email', label: 'Email Log', icon: Mail },
   { page: 'map', label: 'Property Map', icon: MapPin },
   { page: 'assistant', label: 'AI Assistant', icon: Sparkles },
-  { page: 'digest', label: 'Daily Digest', icon: Calendar },
 ];
 
 interface SidebarProps {

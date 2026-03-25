@@ -311,7 +311,7 @@ async function getEmails(userId) {
                 is_inbound as "isInbound", is_read as "isRead", source,
                 importance, has_attachments as "hasAttachments", conversation_id as "conversationId"
          FROM emails
-         WHERE user_id = $1 OR user_id IS NULL
+         WHERE user_id = $1
          ORDER BY created_at DESC`,
         [userId]
       );
@@ -329,7 +329,7 @@ async function getEmails(userId) {
     }
   }
   const emails = loadEmailsJSON();
-  return userId ? emails.filter(e => e.userId === userId || !e.userId) : [];
+  return userId ? emails.filter(e => e.userId === userId) : [];
 }
 
 async function addEmail(email) {
