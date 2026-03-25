@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import crypto from 'crypto';
 import pg from 'pg';
 import Anthropic from '@anthropic-ai/sdk';
+import XLSX from 'xlsx';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -1291,6 +1292,122 @@ function parseEmailDate(dateStr) {
   try { return new Date(dateStr).toISOString().split('T')[0]; }
   catch { return new Date().toISOString().split('T')[0]; }
 }
+
+// ─── DATA EXPORT ──────────────────────────────────────────────────────
+app.get('/api/export', async (req, res) => {
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: 'Not authenticated' });
+
+  const format = (req.query.format || 'xlsx').toString().toLowerCase();
+  const data = loadCRMData();
+  const emails = await getEmails(userId);
+
+  // Build sheets
+  const contactRows = data.contacts.map(c => ({
+    'First Name': c.firstName,
+    'Last Name': c.lastName,
+    'Company': c.company,
+    'Title': c.title || '',
+    'Email': c.email || '',
+    'Phone': c.phone || '',
+    'Mobile': c.mobile || '',
+    'Type': c.type || '',
+    'Priority': c.priority || '',
+    'Property Name': c.propertyName || '',
+    'Address': c.address || '',
+    'Submarket': c.submarket || '',
+    'Market Area': c.marketArea || '',
+    'Industry Type': c.industryType || '',
+    'Estimated Size': c.estimatedSize || '',
+    'Tags': (c.tags || []).join(', '),
+    'Notes': (c.notes || '').slice(0, 500),
+    'Last Contacted': c.lastContactedAt || '',
+    'Next Follow-Up': c.nextFollowUp || '',
+    'Created': c.createdAt || '',
+  }));
+
+  const dealRows = (data.deals || []).map(d => {
+    const contact = data.contacts.find(c => c.id === d.contactId);
+    return {
+      'Deal Name': d.name,
+      'Stage': d.stage,
+      'Contact': contact ? `${contact.firstName} ${contact.lastName}` : '',
+      'Company': contact?.company || '',
+      'Property Type': d.propertyType || '',
+      'Property Address': d.propertyAddress || '',
+      'Square Feet': d.squareFeet || '',
+      'Deal Value': d.dealValue || 0,
+      'Probability': d.probability || 0,
+      'Expected Close': d.expectedCloseDate || '',
+      'Notes': (d.notes || '').slice(0, 500),
+      'Created': d.createdAt || '',
+      'Updated': d.updatedAt || '',
+    };
+  });
+
+  const activityRows = (data.activities || []).map(a => {
+    const contact = data.contacts.find(c => c.id === a.contactId);
+    return {
+      'Date': a.date,
+      'Type': a.type,
+      'Subject': a.subject,
+      'Contact': contact ? `${contact.firstName} ${contact.lastName}` : '',
+      'Company': contact?.company || '',
+      'Description': (a.description || '').slice(0, 500),
+      'Owner': a.owner || '',
+    };
+  });
+
+  const reminderRows = (data.reminders || []).map(r => {
+    const contact = data.contacts.find(c => c.id === r.contactId);
+    return {
+      'Title': r.title,
+      'Description': r.description || '',
+      'Due Date': r.dueDate,
+      'Status': r.status,
+      'Priority': r.priority,
+      'Contact': contact ? `${contact.firstName} ${contact.lastName}` : '',
+      'Company': contact?.company || '',
+      'Assigned To': r.assignedName || '',
+      'Created': r.createdAt || '',
+    };
+  });
+
+  const emailRows = emails.map(e => ({
+    'Date': e.date,
+    'Direction': e.isInbound ? 'Inbound' : 'Outbound',
+    'From': e.from || '',
+    'To': e.to || '',
+    'Subject': e.subject || '',
+    'Body Preview': (e.body || '').slice(0, 300),
+    'Read': e.isRead ? 'Yes' : 'No',
+    'Source': e.source || '',
+  }));
+
+  if (format === 'csv') {
+    // Single CSV — contacts only (most common export)
+    const ws = XLSX.utils.json_to_sheet(contactRows);
+    const csv = XLSX.utils.sheet_to_csv(ws);
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="eastside-crm-contacts-${new Date().toISOString().split('T')[0]}.csv"`);
+    return res.send(csv);
+  }
+
+  // Excel with multiple sheets
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(contactRows), 'Contacts');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dealRows), 'Deals');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(activityRows), 'Activities');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(reminderRows), 'Reminders');
+  if (emailRows.length > 0) {
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(emailRows), 'Emails');
+  }
+
+  const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="eastside-crm-export-${new Date().toISOString().split('T')[0]}.xlsx"`);
+  res.send(buf);
+});
 
 // ─── SERVE FRONTEND ──────────────────────────────────────────────────
 app.use(express.static(join(__dirname, 'dist')));

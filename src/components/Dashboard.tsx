@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, Users, DollarSign, Activity, AlertTriangle, ArrowRight, Clock, Loader2, RefreshCw } from 'lucide-react';
+import { TrendingUp, Users, DollarSign, Activity, AlertTriangle, ArrowRight, Clock, Loader2, RefreshCw, Download } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import type { Store } from '../store';
@@ -72,14 +72,53 @@ export function Dashboard({ store, onNavigate }: DashboardProps) {
     });
   };
 
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async (format: 'xlsx' | 'csv') => {
+    setExporting(true);
+    try {
+      const token = localStorage.getItem('crm_token') || '';
+      const res = await fetch(`/api/export?format=${format}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = format === 'csv'
+        ? `eastside-crm-contacts-${new Date().toISOString().split('T')[0]}.csv`
+        : `eastside-crm-export-${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export failed:', err);
+    }
+    setExporting(false);
+  };
+
   return (
     <div className="p-8 space-y-7 max-w-[1400px]">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-semibold text-foreground tracking-tight">Good {getGreeting()}, Carter</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground tracking-tight">Good {getGreeting()}, Carter</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => handleExport('xlsx')} disabled={exporting}>
+            {exporting ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+            Export Excel
+          </Button>
+          <Button size="sm" variant="ghost" className="h-8 text-xs gap-1.5 text-muted-foreground" onClick={() => handleExport('csv')} disabled={exporting}>
+            <Download size={12} />
+            CSV
+          </Button>
+        </div>
       </div>
 
       {/* AI Daily Briefing */}
