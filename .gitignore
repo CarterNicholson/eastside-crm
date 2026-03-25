@@ -24,3 +24,8 @@ bundle.html
 *.njsproj
 *.sln
 *.sw?
+
+# Data & backups (sensitive — do not commit)
+data/
+backups/
+*.tar.gz

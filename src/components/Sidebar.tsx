@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import {
   LayoutDashboard, Users, Kanban, Bell, Mail, Sparkles, Calendar, MapPin,
-  ChevronLeft, ChevronRight, LogOut
+  ChevronLeft, ChevronRight, LogOut, Shield
 } from 'lucide-react';
 
-export type Page = 'dashboard' | 'contacts' | 'pipeline' | 'reminders' | 'email' | 'assistant' | 'digest' | 'map';
+export type Page = 'dashboard' | 'contacts' | 'pipeline' | 'reminders' | 'email' | 'assistant' | 'digest' | 'map' | 'team';
 
 const NAV_ITEMS: { page: Page; label: string; icon: React.ElementType; badge?: string }[] = [
   { page: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -29,6 +29,12 @@ interface SidebarProps {
 
 export function Sidebar({ currentPage, onNavigate, reminderCount, suggestionCount, unreadEmailCount, user, onLogout }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
+
+  const isAdmin = user?.role === 'admin';
+
+  const allNavItems = isAdmin
+    ? [...NAV_ITEMS, { page: 'team' as Page, label: 'Team', icon: Shield }]
+    : NAV_ITEMS;
 
   const getBadge = (page: Page) => {
     if (page === 'reminders' && reminderCount > 0) return reminderCount;
@@ -67,7 +73,7 @@ export function Sidebar({ currentPage, onNavigate, reminderCount, suggestionCoun
 
       {/* Nav */}
       <nav className="flex-1 py-3 px-3 space-y-0.5 overflow-y-auto dark-scroll">
-        {NAV_ITEMS.map(({ page, label, icon: Icon }) => {
+        {allNavItems.map(({ page, label, icon: Icon }) => {
           const isActive = currentPage === page;
           const badge = getBadge(page);
           return (

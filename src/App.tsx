@@ -9,6 +9,7 @@ import { Assistant } from './components/Assistant';
 import { DailyDigest } from './components/DailyDigest';
 import { PropertyMap } from './components/PropertyMap';
 import { Login } from './components/Login';
+import { TeamAdmin } from './components/TeamAdmin';
 import { useStore } from './store';
 
 interface CRMUser {
@@ -134,6 +135,7 @@ export default function App() {
         {currentPage === 'map' && <PropertyMap store={store} onNavigateToContact={navigateToContact} />}
         {currentPage === 'assistant' && <Assistant store={store} onNavigate={handleNavigate} onNavigateToContact={navigateToContact} />}
         {currentPage === 'digest' && <DailyDigest store={store} />}
+        {currentPage === 'team' && user.role === 'admin' && <TeamAdmin />}
       </main>
     </div>
   );

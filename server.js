@@ -15,6 +15,7 @@ try { mkdirSync(join(__dirname, 'data'), { recursive: true }); } catch {}
 
 const USERS_FILE = join(__dirname, 'data', 'users.json');
 const SESSIONS_FILE = join(__dirname, 'data', 'sessions.json');
+const INVITE_CODES_FILE = join(__dirname, 'data', 'invite-codes.json');
 
 // ─── POSTGRESQL SETUP ──────────────────────────────────────────────
 const { Pool } = pg;
@@ -471,6 +472,56 @@ function initUsers() {
 }
 initUsers();
 
+// ─── INVITE CODE HELPERS ─────────────────────────────────────────
+function generateInviteCode() {
+  // Generate a human-friendly 8-char code like "KM-A3X9F2"
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no O/0/1/I to avoid confusion
+  let code = '';
+  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return `KM-${code}`;
+}
+
+function initInviteCodes() {
+  const codes = loadJSON(INVITE_CODES_FILE, []);
+  if (codes.length === 0) {
+    const defaultCode = {
+      code: generateInviteCode(),
+      createdBy: 'user_carter',
+      createdAt: new Date().toISOString(),
+      role: 'broker',       // what role new signups get
+      maxUses: 20,          // how many people can use this code
+      usedCount: 0,
+      usedBy: [],           // track who used it
+      active: true,
+      label: 'Kidder Mathews Team',
+    };
+    saveJSON(INVITE_CODES_FILE, [defaultCode]);
+    console.log(`[Auth] Default team invite code created: ${defaultCode.code}`);
+    return [defaultCode];
+  }
+  return codes;
+}
+initInviteCodes();
+
+function getActiveInviteCode(code) {
+  const codes = loadJSON(INVITE_CODES_FILE, []);
+  const found = codes.find(c => c.code.toUpperCase() === (code || '').toUpperCase().trim());
+  if (!found) return null;
+  if (!found.active) return null;
+  if (found.maxUses > 0 && found.usedCount >= found.maxUses) return null;
+  return found;
+}
+
+function markInviteCodeUsed(code, userId, userName) {
+  const codes = loadJSON(INVITE_CODES_FILE, []);
+  const found = codes.find(c => c.code.toUpperCase() === code.toUpperCase().trim());
+  if (found) {
+    found.usedCount++;
+    found.usedBy.push({ userId, name: userName, joinedAt: new Date().toISOString() });
+    saveJSON(INVITE_CODES_FILE, codes);
+  }
+}
+
 // Middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -528,6 +579,137 @@ app.post('/api/auth/users', (req, res) => {
   users.push(newUser);
   saveJSON(USERS_FILE, users);
   res.json({ id: newUser.id, name: newUser.name, email: newUser.email, role: newUser.role });
+});
+
+// ─── SIGNUP (with invite code) ─────────────────────────────────────
+app.post('/api/auth/signup', (req, res) => {
+  const { name, email, password, inviteCode } = req.body;
+  if (!name || !email || !password || !inviteCode) {
+    return res.status(400).json({ error: 'All fields are required including team code' });
+  }
+
+  // Validate invite code
+  const invite = getActiveInviteCode(inviteCode);
+  if (!invite) {
+    return res.status(403).json({ error: 'Invalid or expired team code' });
+  }
+
+  // Check if email already exists
+  const users = loadJSON(USERS_FILE, []);
+  if (users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
+    return res.status(409).json({ error: 'An account with this email already exists' });
+  }
+
+  // Validate password strength
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  }
+
+  // Create user
+  const newUser = {
+    id: `user_${Date.now()}`,
+    name: name.trim(),
+    email: email.trim().toLowerCase(),
+    password: hashPassword(password),
+    role: invite.role || 'broker',
+    joinedVia: invite.code,
+    createdAt: new Date().toISOString(),
+  };
+  users.push(newUser);
+  saveJSON(USERS_FILE, users);
+
+  // Mark invite code as used
+  markInviteCodeUsed(invite.code, newUser.id, newUser.name);
+
+  // Auto-login
+  const token = createSession(newUser.id, newUser.name, newUser.email);
+  console.log(`[Auth] New user signed up: ${newUser.name} (${newUser.email}) via code ${invite.code}`);
+
+  res.json({
+    token,
+    user: { id: newUser.id, name: newUser.name, email: newUser.email, role: newUser.role },
+  });
+});
+
+// ─── INVITE CODE MANAGEMENT (admin only) ──────────────────────────
+app.get('/api/invite-codes', (req, res) => {
+  const token = (req.headers.authorization || '').replace('Bearer ', '');
+  const session = getSession(token);
+  if (!session) return res.status(401).json({ error: 'Not authenticated' });
+  const users = loadJSON(USERS_FILE, []);
+  const requester = users.find(u => u.id === session.userId);
+  if (!requester || requester.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+
+  const codes = loadJSON(INVITE_CODES_FILE, []);
+  res.json(codes);
+});
+
+app.post('/api/invite-codes', (req, res) => {
+  const token = (req.headers.authorization || '').replace('Bearer ', '');
+  const session = getSession(token);
+  if (!session) return res.status(401).json({ error: 'Not authenticated' });
+  const users = loadJSON(USERS_FILE, []);
+  const requester = users.find(u => u.id === session.userId);
+  if (!requester || requester.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+
+  const { label, role, maxUses } = req.body;
+  const newCode = {
+    code: generateInviteCode(),
+    createdBy: session.userId,
+    createdAt: new Date().toISOString(),
+    role: role || 'broker',
+    maxUses: maxUses || 20,
+    usedCount: 0,
+    usedBy: [],
+    active: true,
+    label: label || 'Team invite',
+  };
+
+  const codes = loadJSON(INVITE_CODES_FILE, []);
+  codes.push(newCode);
+  saveJSON(INVITE_CODES_FILE, codes);
+
+  console.log(`[Auth] New invite code created: ${newCode.code} by ${requester.name}`);
+  res.json(newCode);
+});
+
+app.patch('/api/invite-codes/:code', (req, res) => {
+  const token = (req.headers.authorization || '').replace('Bearer ', '');
+  const session = getSession(token);
+  if (!session) return res.status(401).json({ error: 'Not authenticated' });
+  const users = loadJSON(USERS_FILE, []);
+  const requester = users.find(u => u.id === session.userId);
+  if (!requester || requester.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+
+  const codes = loadJSON(INVITE_CODES_FILE, []);
+  const found = codes.find(c => c.code === req.params.code);
+  if (!found) return res.status(404).json({ error: 'Code not found' });
+
+  if (req.body.active !== undefined) found.active = req.body.active;
+  if (req.body.maxUses !== undefined) found.maxUses = req.body.maxUses;
+  if (req.body.label !== undefined) found.label = req.body.label;
+
+  saveJSON(INVITE_CODES_FILE, codes);
+  res.json(found);
+});
+
+// ─── TEAM MEMBERS (admin) ──────────────────────────────────────────
+app.delete('/api/auth/users/:userId', (req, res) => {
+  const token = (req.headers.authorization || '').replace('Bearer ', '');
+  const session = getSession(token);
+  if (!session) return res.status(401).json({ error: 'Not authenticated' });
+  const users = loadJSON(USERS_FILE, []);
+  const requester = users.find(u => u.id === session.userId);
+  if (!requester || requester.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+
+  if (req.params.userId === session.userId) {
+    return res.status(400).json({ error: 'Cannot remove yourself' });
+  }
+
+  const updated = users.filter(u => u.id !== req.params.userId);
+  if (updated.length === users.length) return res.status(404).json({ error: 'User not found' });
+  saveJSON(USERS_FILE, updated);
+  res.json({ success: true });
 });
 
 app.post('/api/auth/change-password', (req, res) => {
