@@ -94,23 +94,28 @@ export function Login({ onLogin }: LoginProps) {
 
   return (
     <div className="flex h-screen items-center justify-center relative overflow-hidden"
-      style={{ background: 'linear-gradient(135deg, hsl(222, 47%, 8%) 0%, hsl(224, 50%, 14%) 50%, hsl(220, 45%, 10%) 100%)' }}>
+      style={{ background: 'linear-gradient(140deg, hsl(225, 45%, 7%) 0%, hsl(228, 48%, 12%) 40%, hsl(222, 42%, 8%) 100%)' }}>
 
       {/* Subtle gradient orbs */}
-      <div className="absolute top-[-20%] right-[-10%] w-[500px] h-[500px] rounded-full opacity-[0.08]"
-        style={{ background: 'radial-gradient(circle, hsl(220, 70%, 50%), transparent 70%)' }} />
-      <div className="absolute bottom-[-15%] left-[-10%] w-[400px] h-[400px] rounded-full opacity-[0.06]"
-        style={{ background: 'radial-gradient(circle, hsl(250, 60%, 50%), transparent 70%)' }} />
+      <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] rounded-full opacity-[0.06]"
+        style={{ background: 'radial-gradient(circle, hsl(222, 70%, 50%), transparent 65%)' }} />
+      <div className="absolute bottom-[-15%] left-[-10%] w-[500px] h-[500px] rounded-full opacity-[0.04]"
+        style={{ background: 'radial-gradient(circle, hsl(250, 55%, 50%), transparent 65%)' }} />
+      <div className="absolute top-[20%] left-[30%] w-[300px] h-[300px] rounded-full opacity-[0.03]"
+        style={{ background: 'radial-gradient(circle, hsl(200, 60%, 50%), transparent 70%)' }} />
 
-      <div className="relative z-10 w-[400px]">
+      <div className="relative z-10 w-[400px] slide-up">
         {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="mx-auto w-14 h-14 rounded-2xl flex items-center justify-center mb-5 shadow-lg shadow-blue-500/20"
-            style={{ background: 'linear-gradient(135deg, hsl(220, 70%, 55%), hsl(250, 60%, 50%))' }}>
-            <span className="text-white text-xl font-bold tracking-tight">EC</span>
+        <div className="text-center mb-10">
+          <div className="mx-auto w-16 h-16 rounded-2xl flex items-center justify-center mb-6"
+            style={{
+              background: 'linear-gradient(135deg, hsl(222, 70%, 52%), hsl(250, 55%, 48%))',
+              boxShadow: '0 8px 24px -4px hsla(222, 70%, 50%, 0.4), 0 0 0 1px hsla(222, 70%, 60%, 0.1)',
+            }}>
+            <span className="text-white text-2xl font-bold tracking-tight">EC</span>
           </div>
           <h1 className="text-2xl font-semibold text-white tracking-tight">Eastside CRM</h1>
-          <p className="text-sm text-white/30 mt-1 font-medium">Kidder Mathews</p>
+          <p className="text-[11px] text-white/25 mt-1.5 font-medium tracking-[0.15em] uppercase">Kidder Mathews</p>
         </div>
 
         {/* Mode Tabs */}

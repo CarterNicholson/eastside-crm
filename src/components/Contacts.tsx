@@ -19,6 +19,7 @@ interface ContactsProps {
   store: Store;
   focusContactId?: string | null;
   onFocusHandled?: () => void;
+  currentUser?: { id: string; name: string; email: string; role: string } | null;
 }
 
 const ALL_COLUMNS = [
@@ -42,7 +43,7 @@ const ALL_COLUMNS = [
 
 const DEFAULT_VISIBLE = ['name', 'prospect', 'company', 'title', 'type', 'propertyName', 'email', 'phone', 'mobile', 'contactOwner', 'groupNumber', 'industryType', 'estimatedSize'];
 
-export function Contacts({ store, focusContactId, onFocusHandled }: ContactsProps) {
+export function Contacts({ store, focusContactId, onFocusHandled, currentUser }: ContactsProps) {
   const { contacts, addContact, updateContact, deleteContact, getContactDeals, getContactActivities, getContactReminders } = store;
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<ContactType | 'all'>('all');
@@ -400,6 +401,7 @@ export function Contacts({ store, focusContactId, onFocusHandled }: ContactsProp
               store={store}
               onClose={() => setSelectedContact(null)}
               onEdit={() => setShowEditDialog(true)}
+              currentUser={currentUser}
             />
           </div>
         )}
@@ -427,8 +429,9 @@ export function Contacts({ store, focusContactId, onFocusHandled }: ContactsProp
 
 // ─── Contact Detail Panel ──────────────────────────────────────────────
 
-function ContactDetail({ contact, store, onClose, onEdit }: {
+function ContactDetail({ contact, store, onClose, onEdit, currentUser }: {
   contact: Contact; store: Store; onClose: () => void; onEdit: () => void;
+  currentUser?: { id: string; name: string; email: string; role: string } | null;
 }) {
   const deals = store.getContactDeals(contact.id);
   const activities = store.getContactActivities(contact.id);
@@ -436,6 +439,18 @@ function ContactDetail({ contact, store, onClose, onEdit }: {
   const emails = store.getContactEmails(contact.id);
   const [showAddActivity, setShowAddActivity] = useState(false);
   const [editingActivity, setEditingActivity] = useState<string | null>(null);
+  const [showAddReminder, setShowAddReminder] = useState(false);
+  const [teamMembers, setTeamMembers] = useState<{id: string; name: string; email: string; role: string}[]>([]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('crm_token') || '';
+    if (token) {
+      fetch('/api/auth/users', { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? r.json() : [])
+        .then(setTeamMembers)
+        .catch(() => {});
+    }
+  }, []);
 
   // AI Insight
   const [insight, setInsight] = useState<string | null>(null);
@@ -537,22 +552,27 @@ function ContactDetail({ contact, store, onClose, onEdit }: {
           </Card>
         )}
 
-        {/* Pending Reminders */}
-        {reminders.length > 0 && (
-          <Card>
-            <CardHeader className="py-3 px-4">
-              <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pending Follow-Ups</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0 px-4 pb-3 space-y-2">
-              {reminders.map(r => (
+        {/* Follow-Ups */}
+        <Card>
+          <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
+            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Follow-Ups ({reminders.length})</CardTitle>
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setShowAddReminder(true)}>
+              <Plus size={12} /> Add Follow-Up
+            </Button>
+          </CardHeader>
+          <CardContent className="pt-0 px-4 pb-3 space-y-2">
+            {reminders.length === 0 ? (
+              <div className="text-sm text-muted-foreground text-center py-3">No pending follow-ups</div>
+            ) : (
+              reminders.map(r => (
                 <div key={r.id} className={`p-2 rounded text-sm ${r.dueDate < new Date().toISOString().split('T')[0] ? 'bg-red-50' : 'bg-amber-50'}`}>
                   <div className="font-medium">{r.title}</div>
-                  <div className="text-xs text-muted-foreground">Due: {formatDate(r.dueDate)}</div>
+                  <div className="text-xs text-muted-foreground">Due: {formatDate(r.dueDate)}{r.assignedName ? ` · ${r.assignedName}` : ''}</div>
                 </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
+              ))
+            )}
+          </CardContent>
+        </Card>
 
         {/* Deals */}
         {deals.length > 0 && (
@@ -649,8 +669,126 @@ function ContactDetail({ contact, store, onClose, onEdit }: {
         contactId={contact.id}
         store={store}
         editActivityId={editingActivity}
+        currentUser={currentUser}
+      />
+
+      {/* Add Follow-Up Dialog */}
+      <AddFollowUpDialog
+        open={showAddReminder}
+        onOpenChange={setShowAddReminder}
+        contactId={contact.id}
+        store={store}
+        teamMembers={teamMembers}
+        currentUser={currentUser}
       />
     </div>
+  );
+}
+
+// ─── Add Follow-Up Dialog ──────────────────────────────────────────
+
+function AddFollowUpDialog({ open, onOpenChange, contactId, store, teamMembers, currentUser }: {
+  open: boolean; onOpenChange: (open: boolean) => void;
+  contactId: string; store: Store;
+  teamMembers: { id: string; name: string; email: string; role: string }[];
+  currentUser?: { id: string; name: string; email: string; role: string } | null;
+}) {
+  const [form, setForm] = useState({
+    title: '',
+    description: '',
+    dueDate: '',
+    priority: 'medium' as Priority,
+    assignedTo: currentUser?.id || '',
+    assignedName: currentUser?.name || '',
+  });
+
+  useEffect(() => {
+    if (open) {
+      setForm({
+        title: '',
+        description: '',
+        dueDate: '',
+        priority: 'medium',
+        assignedTo: currentUser?.id || '',
+        assignedName: currentUser?.name || '',
+      });
+    }
+  }, [open, currentUser]);
+
+  const handleAssigneeChange = (userId: string) => {
+    if (userId === '__unassigned__') {
+      setForm({ ...form, assignedTo: '', assignedName: '' });
+    } else {
+      const member = teamMembers.find(m => m.id === userId);
+      setForm({ ...form, assignedTo: userId, assignedName: member?.name || '' });
+    }
+  };
+
+  const handleSave = () => {
+    if (!form.title || !form.dueDate) return;
+    store.addReminder({
+      contactId,
+      title: form.title,
+      description: form.description,
+      dueDate: form.dueDate,
+      priority: form.priority,
+      status: 'pending',
+      isAutoGenerated: false,
+      assignedTo: form.assignedTo || undefined,
+      assignedName: form.assignedName || undefined,
+    });
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>Add Follow-Up</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label className="text-xs">Title *</Label>
+            <Input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="mt-1" placeholder="e.g. Follow up on lease renewal" />
+          </div>
+          <div>
+            <Label className="text-xs">Description</Label>
+            <Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="mt-1" rows={2} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Due Date *</Label>
+              <Input type="date" value={form.dueDate} onChange={e => setForm({ ...form, dueDate: e.target.value })} className="mt-1" />
+            </div>
+            <div>
+              <Label className="text-xs">Priority</Label>
+              <Select value={form.priority} onValueChange={v => setForm({ ...form, priority: v as Priority })}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="low">Low</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs">Assign To</Label>
+            <Select value={form.assignedTo || '__unassigned__'} onValueChange={handleAssigneeChange}>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="Unassigned" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__unassigned__">Unassigned</SelectItem>
+                {teamMembers.map(m => (
+                  <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button onClick={handleSave} className="bg-[hsl(215,65%,45%)] hover:bg-[hsl(215,65%,40%)]">Add Follow-Up</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -667,9 +805,10 @@ const ACTIVITY_TYPES: { key: ActivityType; label: string }[] = [
   { key: 'proposal', label: 'Proposal' },
 ];
 
-function ActivityFormDialog({ open, onOpenChange, contactId, store, editActivityId }: {
+function ActivityFormDialog({ open, onOpenChange, contactId, store, editActivityId, currentUser }: {
   open: boolean; onOpenChange: (open: boolean) => void;
   contactId: string; store: Store; editActivityId: string | null;
+  currentUser?: { id: string; name: string; email: string; role: string } | null;
 }) {
   const existingActivity = editActivityId
     ? store.activities.find(a => a.id === editActivityId)
@@ -683,6 +822,17 @@ function ActivityFormDialog({ open, onOpenChange, contactId, store, editActivity
     owner: existingActivity?.owner || '',
   });
 
+  const [teamMembers, setTeamMembers] = useState<{id: string; name: string}[]>([]);
+  useEffect(() => {
+    const token = localStorage.getItem('crm_token') || '';
+    if (token) {
+      fetch('/api/auth/users', { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? r.json() : [])
+        .then((members: any[]) => setTeamMembers(members.map(m => ({ id: m.id, name: m.name }))))
+        .catch(() => {});
+    }
+  }, []);
+
   useEffect(() => {
     if (open) {
       const a = editActivityId ? store.activities.find(act => act.id === editActivityId) : null;
@@ -691,10 +841,10 @@ function ActivityFormDialog({ open, onOpenChange, contactId, store, editActivity
         subject: a?.subject || '',
         description: a?.description || '',
         date: a?.date || new Date().toISOString().split('T')[0],
-        owner: a?.owner || '',
+        owner: a?.owner || currentUser?.name || '',
       });
     }
-  }, [open, editActivityId, store.activities]);
+  }, [open, editActivityId, store.activities, currentUser]);
 
   const handleSave = () => {
     if (!form.subject) return;
@@ -742,8 +892,7 @@ function ActivityFormDialog({ open, onOpenChange, contactId, store, editActivity
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Who did this?" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_none">No owner</SelectItem>
-                  <SelectItem value="Carter">Carter</SelectItem>
-                  <SelectItem value="Greg">Greg</SelectItem>
+                  {teamMembers.map(m => <SelectItem key={m.id} value={m.name}>{m.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>

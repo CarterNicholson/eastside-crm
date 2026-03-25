@@ -338,21 +338,21 @@ function StatCard({ icon: Icon, label, value, sub, color }: {
   color: 'blue' | 'teal' | 'amber' | 'red' | 'green';
 }) {
   const gradients: Record<string, string> = {
-    blue: 'linear-gradient(135deg, hsl(220, 70%, 55%), hsl(250, 60%, 50%))',
-    teal: 'linear-gradient(135deg, hsl(160, 50%, 42%), hsl(170, 55%, 35%))',
-    amber: 'linear-gradient(135deg, hsl(38, 92%, 50%), hsl(25, 95%, 53%))',
-    red: 'linear-gradient(135deg, hsl(0, 65%, 51%), hsl(350, 70%, 45%))',
-    green: 'linear-gradient(135deg, hsl(150, 50%, 42%), hsl(160, 55%, 38%))',
+    blue: 'linear-gradient(135deg, hsl(222, 70%, 52%), hsl(250, 55%, 48%))',
+    teal: 'linear-gradient(135deg, hsl(165, 55%, 40%), hsl(175, 50%, 34%))',
+    amber: 'linear-gradient(135deg, hsl(38, 92%, 50%), hsl(28, 95%, 48%))',
+    red: 'linear-gradient(135deg, hsl(0, 68%, 52%), hsl(350, 72%, 46%))',
+    green: 'linear-gradient(135deg, hsl(155, 55%, 40%), hsl(165, 50%, 36%))',
   };
   return (
-    <div className="premium-card rounded-xl p-5 relative overflow-hidden">
+    <div className="premium-card stat-card rounded-2xl p-6 relative overflow-hidden">
       <div className="flex items-start justify-between">
         <div>
-          <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">{label}</div>
-          <div className="text-2xl font-bold mt-1.5 text-foreground tracking-tight">{value.toLocaleString()}</div>
-          <div className="text-[11px] text-muted-foreground mt-1 font-medium">{sub}</div>
+          <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-[0.08em]">{label}</div>
+          <div className="text-3xl font-bold mt-2 text-foreground tracking-tight">{value.toLocaleString()}</div>
+          <div className="text-[11px] text-muted-foreground mt-1.5 font-medium">{sub}</div>
         </div>
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-sm" style={{ background: gradients[color] }}>
+        <div className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-lg" style={{ background: gradients[color], boxShadow: `0 4px 14px -2px ${color === 'blue' ? 'hsla(222,70%,50%,0.3)' : color === 'amber' ? 'hsla(38,92%,50%,0.3)' : color === 'red' ? 'hsla(0,68%,52%,0.3)' : 'hsla(160,55%,40%,0.3)'}` }}>
           <Icon size={18} className="text-white" />
         </div>
       </div>

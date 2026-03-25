@@ -116,7 +116,7 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: 'hsl(220, 14%, 96%)' }}>
+    <div className="flex h-screen overflow-hidden" style={{ background: 'hsl(225, 20%, 97%)' }}>
       <Sidebar
         currentPage={currentPage}
         onNavigate={handleNavigate}
@@ -128,7 +128,7 @@ export default function App() {
       />
       <main className="flex-1 overflow-y-auto">
         {currentPage === 'dashboard' && <Dashboard store={store} onNavigate={handleNavigate} />}
-        {currentPage === 'contacts' && <Contacts store={store} focusContactId={focusContactId} onFocusHandled={() => setFocusContactId(null)} />}
+        {currentPage === 'contacts' && <Contacts store={store} focusContactId={focusContactId} onFocusHandled={() => setFocusContactId(null)} currentUser={user} />}
         {currentPage === 'pipeline' && <Pipeline store={store} />}
         {currentPage === 'reminders' && <Reminders store={store} onNavigateToContact={navigateToContact} />}
         {currentPage === 'email' && <EmailLog store={store} />}
